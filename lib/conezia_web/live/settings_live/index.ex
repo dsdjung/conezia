@@ -158,6 +158,8 @@ defmodule ConeziaWeb.SettingsLive.Index do
                 <p class="font-medium text-gray-900">{service.display_name}</p>
                 <p class="text-sm text-gray-500">
                   <%= cond do %>
+                    <% service.status == :connected && service.account && service.account.status == "error" -> %>
+                      <span class="text-red-600">Error: {service.account.sync_error}</span>
                     <% service.status == :connected -> %>
                       Connected
                       <%= if service.account && service.account.last_synced_at do %>
@@ -245,9 +247,18 @@ defmodule ConeziaWeb.SettingsLive.Index do
                 <.badge color={status_color(job.status)}>
                   {String.capitalize(job.status)}
                 </.badge>
+                <%= if job.status == "failed" && job.error_log != [] do %>
+                  <p class="mt-1 text-xs text-red-600">
+                    {get_first_error(job.error_log)}
+                  </p>
+                <% end %>
               </td>
               <td class="py-4 text-sm text-gray-500">
-                {job.created_records} created, {job.merged_records} merged
+                <%= if job.status == "failed" do %>
+                  -
+                <% else %>
+                  {job.created_records} created, {job.merged_records} merged
+                <% end %>
               </td>
               <td class="py-4 text-sm text-gray-500">
                 {format_datetime(job.inserted_at)}
@@ -326,6 +337,12 @@ defmodule ConeziaWeb.SettingsLive.Index do
   end
 
   defp humanize_source(_), do: "Unknown"
+
+  defp get_first_error(nil), do: nil
+  defp get_first_error([]), do: nil
+  defp get_first_error([first | _]) when is_map(first), do: first["message"] || "Unknown error"
+  defp get_first_error([first | _]) when is_binary(first), do: first
+  defp get_first_error(_), do: "Unknown error"
 
   defp format_datetime(nil), do: "N/A"
   defp format_datetime(datetime) do
