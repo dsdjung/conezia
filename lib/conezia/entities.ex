@@ -86,6 +86,13 @@ defmodule Conezia.Entities do
     Repo.delete(entity)
   end
 
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking entity changes.
+  """
+  def change_entity(%Entity{} = entity, attrs \\ %{}) do
+    Entity.changeset(entity, attrs)
+  end
+
   def touch_entity_interaction(%Entity{} = entity) do
     entity
     |> Entity.touch_interaction_changeset()

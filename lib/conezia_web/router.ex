@@ -1,6 +1,18 @@
 defmodule ConeziaWeb.Router do
   use ConeziaWeb, :router
 
+  import ConeziaWeb.UserAuth
+
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {ConeziaWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    plug :fetch_current_user
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
     plug ConeziaWeb.Plugs.RequestId
@@ -34,6 +46,46 @@ defmodule ConeziaWeb.Router do
 
   pipeline :auth_rate_limited_verify do
     plug ConeziaWeb.Plugs.AuthRateLimiter, action: :verify_email
+  end
+
+  # Web UI Routes (LiveView)
+
+  # Public routes (redirect if authenticated)
+  scope "/", ConeziaWeb do
+    pipe_through [:browser, :redirect_if_user_is_authenticated]
+
+    live_session :redirect_if_user_is_authenticated,
+      on_mount: [{ConeziaWeb.UserAuth, :redirect_if_user_is_authenticated}] do
+      live "/login", AuthLive.LoginLive, :index
+      live "/register", AuthLive.RegisterLive, :index
+      live "/forgot-password", AuthLive.ForgotPasswordLive, :index
+    end
+
+    post "/login", SessionController, :create
+  end
+
+  # Authenticated routes
+  scope "/", ConeziaWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    live_session :require_authenticated_user,
+      on_mount: [{ConeziaWeb.UserAuth, :ensure_authenticated}] do
+      live "/", DashboardLive.Index, :index
+      live "/contacts", EntityLive.Index, :index
+      live "/contacts/new", EntityLive.Index, :new
+      live "/contacts/:id", EntityLive.Show, :show
+      live "/contacts/:id/edit", EntityLive.Show, :edit
+      live "/reminders", ReminderLive.Index, :index
+      live "/reminders/new", ReminderLive.Index, :new
+      live "/reminders/:id/edit", ReminderLive.Index, :edit
+    end
+  end
+
+  # Logout route
+  scope "/", ConeziaWeb do
+    pipe_through [:browser]
+
+    delete "/logout", SessionController, :delete
   end
 
   # Public authentication endpoints with strict rate limiting

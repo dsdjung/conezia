@@ -1,0 +1,175 @@
+<div class="min-h-full">
+  <!-- Navigation sidebar -->
+  <nav class="fixed inset-y-0 left-0 z-50 w-64 bg-indigo-700 hidden lg:block">
+    <div class="flex h-16 shrink-0 items-center px-6">
+      <span class="text-xl font-bold text-white">Conezia</span>
+    </div>
+    <nav class="mt-5 flex flex-1 flex-col px-4">
+      <ul role="list" class="flex flex-1 flex-col gap-y-2">
+        <li>
+          <.link
+            navigate={~p"/"}
+            class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+          >
+            <span class="hero-home h-6 w-6 shrink-0" />
+            Dashboard
+          </.link>
+        </li>
+        <li>
+          <.link
+            navigate={~p"/contacts"}
+            class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+          >
+            <span class="hero-users h-6 w-6 shrink-0" />
+            Contacts
+          </.link>
+        </li>
+        <li>
+          <.link
+            navigate={~p"/reminders"}
+            class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+          >
+            <span class="hero-bell h-6 w-6 shrink-0" />
+            Reminders
+          </.link>
+        </li>
+      </ul>
+    </nav>
+  </nav>
+
+  <!-- Main content area -->
+  <div class="lg:pl-64">
+    <!-- Top header bar -->
+    <header class="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+      <!-- Mobile menu button -->
+      <button
+        type="button"
+        class="-m-2.5 p-2.5 text-gray-700 lg:hidden"
+        phx-click={show_mobile_menu()}
+      >
+        <span class="sr-only">Open sidebar</span>
+        <span class="hero-bars-3 h-6 w-6" />
+      </button>
+
+      <!-- Separator -->
+      <div class="h-6 w-px bg-gray-200 lg:hidden" aria-hidden="true" />
+
+      <div class="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+        <div class="flex flex-1"></div>
+        <div class="flex items-center gap-x-4 lg:gap-x-6">
+          <!-- User menu -->
+          <div class="relative">
+            <button
+              type="button"
+              class="-m-1.5 flex items-center p-1.5"
+              id="user-menu-button"
+              phx-click={toggle_user_menu()}
+            >
+              <span class="sr-only">Open user menu</span>
+              <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-500">
+                <span class="text-sm font-medium leading-none text-white">
+                  {user_initials(assigns[:current_user])}
+                </span>
+              </span>
+              <span class="hidden lg:flex lg:items-center">
+                <span class="ml-4 text-sm font-semibold leading-6 text-gray-900" aria-hidden="true">
+                  {user_name(assigns[:current_user])}
+                </span>
+                <span class="hero-chevron-down ml-2 h-5 w-5 text-gray-400" />
+              </span>
+            </button>
+
+            <!-- Dropdown menu (hidden by default) -->
+            <div
+              id="user-dropdown-menu"
+              class="hidden absolute right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 focus:outline-none"
+            >
+              <.link
+                href={~p"/logout"}
+                method="delete"
+                class="block px-3 py-1 text-sm leading-6 text-gray-900 hover:bg-gray-50"
+              >
+                Sign out
+              </.link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="py-10">
+      <div class="px-4 sm:px-6 lg:px-8">
+        <.flash_group flash={@flash} />
+        {@inner_content}
+      </div>
+    </main>
+  </div>
+
+  <!-- Mobile sidebar (hidden by default) -->
+  <div id="mobile-sidebar" class="relative z-50 lg:hidden hidden" role="dialog" aria-modal="true">
+    <div id="mobile-sidebar-backdrop" class="fixed inset-0 bg-gray-900/80"></div>
+
+    <div class="fixed inset-0 flex">
+      <div id="mobile-sidebar-panel" class="relative mr-16 flex w-full max-w-xs flex-1">
+        <div class="absolute left-full top-0 flex w-16 justify-center pt-5">
+          <button type="button" class="-m-2.5 p-2.5" phx-click={hide_mobile_menu()}>
+            <span class="sr-only">Close sidebar</span>
+            <span class="hero-x-mark h-6 w-6 text-white" />
+          </button>
+        </div>
+
+        <div class="flex grow flex-col gap-y-5 overflow-y-auto bg-indigo-700 px-6 pb-4">
+          <div class="flex h-16 shrink-0 items-center">
+            <span class="text-xl font-bold text-white">Conezia</span>
+          </div>
+          <nav class="flex flex-1 flex-col">
+            <ul role="list" class="flex flex-1 flex-col gap-y-2">
+              <li>
+                <.link
+                  navigate={~p"/"}
+                  class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+                >
+                  <span class="hero-home h-6 w-6 shrink-0" />
+                  Dashboard
+                </.link>
+              </li>
+              <li>
+                <.link
+                  navigate={~p"/contacts"}
+                  class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+                >
+                  <span class="hero-users h-6 w-6 shrink-0" />
+                  Contacts
+                </.link>
+              </li>
+              <li>
+                <.link
+                  navigate={~p"/reminders"}
+                  class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+                >
+                  <span class="hero-bell h-6 w-6 shrink-0" />
+                  Reminders
+                </.link>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // JS helpers for mobile menu and user dropdown
+  window.addEventListener("phx:show-mobile-menu", () => {
+    document.getElementById("mobile-sidebar").classList.remove("hidden");
+  });
+
+  window.addEventListener("phx:hide-mobile-menu", () => {
+    document.getElementById("mobile-sidebar").classList.add("hidden");
+  });
+
+  window.addEventListener("phx:toggle-user-menu", () => {
+    document.getElementById("user-dropdown-menu").classList.toggle("hidden");
+  });
+</script>

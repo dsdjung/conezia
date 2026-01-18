@@ -1,6 +1,8 @@
 defmodule Conezia.HealthTest do
   use Conezia.DataCase, async: true
 
+  import Conezia.Factory
+
   alias Conezia.Health
   alias Conezia.Entities.{Entity, Relationship}
 

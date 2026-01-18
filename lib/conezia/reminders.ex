@@ -108,6 +108,13 @@ defmodule Conezia.Reminders do
     Repo.delete(reminder)
   end
 
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking reminder changes.
+  """
+  def change_reminder(%Reminder{} = reminder, attrs \\ %{}) do
+    Reminder.changeset(reminder, attrs)
+  end
+
   def snooze_reminder(%Reminder{} = reminder, until) do
     reminder
     |> Reminder.snooze_changeset(until)
@@ -166,6 +173,36 @@ defmodule Conezia.Reminders do
     |> order_by([r], asc: r.due_at)
     |> preload([:entity])
     |> Repo.all()
+  end
+
+  @doc """
+  Lists upcoming reminders that are not yet completed.
+  """
+  def list_upcoming_reminders(user_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 10)
+    now = DateTime.utc_now()
+
+    Reminder
+    |> where([r], r.user_id == ^user_id)
+    |> where([r], is_nil(r.completed_at))
+    |> where([r], r.due_at >= ^now or (not is_nil(r.snoozed_until) and r.snoozed_until >= ^now))
+    |> order_by([r], asc: r.due_at)
+    |> limit(^limit)
+    |> preload([:entity])
+    |> Repo.all()
+  end
+
+  @doc """
+  Counts upcoming reminders for a user.
+  """
+  def count_upcoming_reminders(user_id) do
+    now = DateTime.utc_now()
+
+    Reminder
+    |> where([r], r.user_id == ^user_id)
+    |> where([r], is_nil(r.completed_at))
+    |> where([r], r.due_at >= ^now or (not is_nil(r.snoozed_until) and r.snoozed_until >= ^now))
+    |> Repo.aggregate(:count)
   end
 
   @doc """

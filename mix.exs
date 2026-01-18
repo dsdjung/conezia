@@ -67,6 +67,19 @@ defmodule Conezia.MixProject do
       # Background jobs
       {:oban, "~> 2.17"},
 
+      # LiveView and assets
+      {:phoenix_live_view, "~> 1.1"},
+      {:phoenix_html, "~> 4.0"},
+      {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
+      {:heroicons,
+       github: "tailwindlabs/heroicons",
+       tag: "v2.1.1",
+       sparse: "optimized",
+       app: false,
+       compile: false,
+       depth: 1},
+
       # Testing
       {:ex_machina, "~> 2.8", only: :test},
       {:mox, "~> 1.0", only: :test}
@@ -81,11 +94,18 @@ defmodule Conezia.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup"],
+      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.build": ["tailwind conezia", "esbuild conezia"],
+      "assets.deploy": [
+        "tailwind conezia --minify",
+        "esbuild conezia --minify",
+        "phx.digest"
+      ]
     ]
   end
 end
