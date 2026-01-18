@@ -161,49 +161,49 @@ defmodule ConeziaWeb.EntityLive.Index do
             id={dom_id}
             class="hover:bg-gray-50"
           >
-            <.link navigate={~p"/connections/#{entity.id}"} class="block">
-              <div class="flex items-center px-4 py-4 sm:px-6">
-                <div class="flex min-w-0 flex-1 items-center">
-                  <div class="flex-shrink-0">
-                    <.avatar name={entity.name} size={:lg} />
+            <div class="flex items-center px-4 py-4 sm:px-6">
+              <.link navigate={~p"/connections/#{entity.id}"} class="flex min-w-0 flex-1 items-center">
+                <div class="flex-shrink-0">
+                  <.avatar name={entity.name} size={:lg} />
+                </div>
+                <div class="min-w-0 flex-1 px-4">
+                  <div>
+                    <p class="truncate text-sm font-medium text-indigo-600">{entity.name}</p>
+                    <p class="mt-1 truncate text-sm text-gray-500">{entity.description || "No description"}</p>
                   </div>
-                  <div class="min-w-0 flex-1 px-4">
-                    <div>
-                      <p class="truncate text-sm font-medium text-indigo-600">{entity.name}</p>
-                      <p class="mt-1 truncate text-sm text-gray-500">{entity.description || "No description"}</p>
-                    </div>
-                    <div class="mt-2 flex items-center gap-2">
-                      <.badge color={entity_type_color(entity.type)}>{entity.type || "person"}</.badge>
-                      <.badge :if={relationship = @relationships[entity.id]} color={relationship_type_color(relationship.type)}>
-                        {relationship_display_label(relationship)}
-                      </.badge>
-                      <.health_badge status={health_status(entity)} />
-                    </div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <.badge color={entity_type_color(entity.type)}>{entity.type || "person"}</.badge>
+                    <.badge :if={relationship = @relationships[entity.id]} color={relationship_type_color(relationship.type)}>
+                      {relationship_display_label(relationship)}
+                    </.badge>
+                    <.health_badge status={health_status(entity)} />
                   </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <.link
-                    patch={~p"/connections/#{entity.id}/edit"}
-                    class="p-1 text-gray-400 hover:text-gray-600"
-                    title="Edit"
-                  >
-                    <.icon name="hero-pencil-square" class="h-5 w-5" />
-                    <span class="sr-only">Edit</span>
-                  </.link>
-                  <button
-                    phx-click="delete"
-                    phx-value-id={entity.id}
-                    data-confirm="Are you sure you want to delete this connection?"
-                    class="p-1 text-gray-400 hover:text-red-500"
-                    title="Delete"
-                  >
-                    <.icon name="hero-trash" class="h-5 w-5" />
-                    <span class="sr-only">Delete</span>
-                  </button>
-                  <.icon name="hero-chevron-right" class="h-5 w-5 text-gray-400" />
-                </div>
+              </.link>
+              <div class="flex items-center gap-2 ml-4">
+                <.link
+                  patch={~p"/connections/#{entity.id}/edit"}
+                  class="p-2 rounded-md text-gray-500 hover:text-indigo-600 hover:bg-gray-100"
+                  title="Edit"
+                >
+                  <.icon name="hero-pencil-square" class="h-5 w-5" />
+                  <span class="sr-only">Edit</span>
+                </.link>
+                <button
+                  phx-click="delete"
+                  phx-value-id={entity.id}
+                  data-confirm="Are you sure you want to delete this connection?"
+                  class="p-2 rounded-md text-gray-500 hover:text-red-600 hover:bg-gray-100"
+                  title="Delete"
+                >
+                  <.icon name="hero-trash" class="h-5 w-5" />
+                  <span class="sr-only">Delete</span>
+                </button>
+                <.link navigate={~p"/connections/#{entity.id}"} class="p-2 text-gray-400">
+                  <.icon name="hero-chevron-right" class="h-5 w-5" />
+                </.link>
               </div>
-            </.link>
+            </div>
           </li>
         </ul>
 
