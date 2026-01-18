@@ -88,6 +88,14 @@ defmodule ConeziaWeb.Router do
     delete "/logout", SessionController, :delete
   end
 
+  # OAuth routes (public, no CSRF for callback)
+  scope "/auth", ConeziaWeb do
+    pipe_through [:browser, :redirect_if_user_is_authenticated]
+
+    get "/google", OAuthController, :google
+    get "/google/callback", OAuthController, :google_callback
+  end
+
   # Public authentication endpoints with strict rate limiting
   scope "/api/v1/auth", ConeziaWeb do
     pipe_through [:api, :rate_limited]

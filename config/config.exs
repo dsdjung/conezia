@@ -35,6 +35,11 @@ config :conezia, Oban,
 config :conezia, Conezia.Vault,
   secret_key: "dev_vault_key_32_bytes_change_me!"
 
+# Configure Google OAuth (override in runtime.exs for production)
+config :conezia, :google_oauth,
+  client_id: System.get_env("GOOGLE_CLIENT_ID"),
+  client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
+
 # Configure storage adapter (local for development)
 config :conezia, Conezia.Storage,
   adapter: Conezia.Storage.Local,

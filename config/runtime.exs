@@ -106,6 +106,25 @@ if config_env() == :prod do
   config :conezia, Conezia.Vault,
     secret_key: vault_key
 
+  # Google OAuth configuration - REQUIRED for Google Sign-In
+  google_client_id =
+    System.get_env("GOOGLE_CLIENT_ID") ||
+      raise """
+      environment variable GOOGLE_CLIENT_ID is missing.
+      Get this from the Google Cloud Console.
+      """
+
+  google_client_secret =
+    System.get_env("GOOGLE_CLIENT_SECRET") ||
+      raise """
+      environment variable GOOGLE_CLIENT_SECRET is missing.
+      Get this from the Google Cloud Console.
+      """
+
+  config :conezia, :google_oauth,
+    client_id: google_client_id,
+    client_secret: google_client_secret
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key
