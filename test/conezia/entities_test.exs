@@ -149,6 +149,25 @@ defmodule Conezia.EntitiesTest do
       relationships = Entities.list_relationships(user.id)
       assert length(relationships) == 2
     end
+
+    test "get_relationships_for_entities/2 returns map of entity_id to relationship" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+      entity3 = insert(:entity, owner: user)
+      rel1 = insert(:relationship, user: user, entity: entity1, type: "friend")
+      rel2 = insert(:relationship, user: user, entity: entity2, type: "family")
+      # entity3 has no relationship
+
+      relationships = Entities.get_relationships_for_entities(user.id, [entity1.id, entity2.id, entity3.id])
+
+      assert map_size(relationships) == 2
+      assert relationships[entity1.id].id == rel1.id
+      assert relationships[entity1.id].type == "friend"
+      assert relationships[entity2.id].id == rel2.id
+      assert relationships[entity2.id].type == "family"
+      assert is_nil(relationships[entity3.id])
+    end
   end
 
   describe "relationship subtypes" do

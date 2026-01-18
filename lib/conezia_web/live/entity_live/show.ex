@@ -179,7 +179,7 @@ defmodule ConeziaWeb.EntityLive.Show do
               {@entity.name}
             </h1>
             <div class="mt-1 flex items-center gap-2">
-              <.badge color={entity_type_color(@entity.type)}>{@entity.type}</.badge>
+              <.badge color={entity_type_color(@entity.type)}>{@entity.type || "person"}</.badge>
               <.badge :if={@relationship} color={relationship_type_color(@relationship.type)}>
                 {relationship_display_label(@relationship)}
               </.badge>
@@ -190,7 +190,7 @@ defmodule ConeziaWeb.EntityLive.Show do
         <div class="mt-4 flex items-center gap-2 md:mt-0">
           <.link patch={~p"/connections/#{@entity.id}/edit"}>
             <.button class="bg-white text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50">
-              <span class="hero-pencil-square -ml-0.5 mr-1.5 h-5 w-5" />
+              <.icon name="hero-pencil-square" class="-ml-0.5 mr-1.5 h-5 w-5" />
               Edit
             </.button>
           </.link>
@@ -199,7 +199,7 @@ defmodule ConeziaWeb.EntityLive.Show do
             data-confirm="Are you sure you want to delete this connection? This action cannot be undone."
             class="bg-red-600 hover:bg-red-700"
           >
-            <span class="hero-trash -ml-0.5 mr-1.5 h-5 w-5" />
+            <.icon name="hero-trash" class="-ml-0.5 mr-1.5 h-5 w-5" />
             Delete
           </.button>
         </div>
@@ -213,7 +213,7 @@ defmodule ConeziaWeb.EntityLive.Show do
             <:header>Details</:header>
             <.list>
               <:item :if={@entity.description} title="Description">{@entity.description}</:item>
-              <:item title="Type">{String.capitalize(@entity.type || "Unknown")}</:item>
+              <:item title="Type">{String.capitalize(@entity.type || "person")}</:item>
               <:item :if={@relationship} title="Relationship">
                 {relationship_display_label(@relationship)}
               </:item>

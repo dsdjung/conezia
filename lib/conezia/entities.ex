@@ -226,6 +226,18 @@ defmodule Conezia.Entities do
     Repo.delete(relationship)
   end
 
+  @doc """
+  Get relationships for multiple entities at once.
+  Returns a map of entity_id => relationship.
+  """
+  def get_relationships_for_entities(user_id, entity_ids) when is_list(entity_ids) do
+    from(r in Relationship,
+      where: r.user_id == ^user_id and r.entity_id in ^entity_ids
+    )
+    |> Repo.all()
+    |> Map.new(fn r -> {r.entity_id, r} end)
+  end
+
   # Identifier functions
 
   def get_identifier(id), do: Repo.get(Identifier, id)

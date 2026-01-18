@@ -5,18 +5,22 @@ defmodule ConeziaWeb.EntityLive.Index do
   use ConeziaWeb, :live_view
 
   alias Conezia.Entities
-  alias Conezia.Entities.Entity
+  alias Conezia.Entities.{Entity, Relationship}
 
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
+    entities = Entities.list_entities(user.id)
+    entity_ids = Enum.map(entities, & &1.id)
+    relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
     socket =
       socket
       |> assign(:page_title, "Connections")
       |> assign(:search, "")
       |> assign(:type_filter, nil)
-      |> stream(:entities, Entities.list_entities(user.id))
+      |> assign(:relationships, relationships)
+      |> stream(:entities, entities)
 
     {:ok, socket}
   end
@@ -44,10 +48,13 @@ defmodule ConeziaWeb.EntityLive.Index do
     type = socket.assigns.type_filter
 
     entities = Entities.list_entities(user.id, search: search, type: type)
+    entity_ids = Enum.map(entities, & &1.id)
+    relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
     socket =
       socket
       |> assign(:search, search)
+      |> assign(:relationships, relationships)
       |> stream(:entities, entities, reset: true)
 
     {:noreply, socket}
@@ -59,10 +66,13 @@ defmodule ConeziaWeb.EntityLive.Index do
     type = if type == "", do: nil, else: type
 
     entities = Entities.list_entities(user.id, search: search, type: type)
+    entity_ids = Enum.map(entities, & &1.id)
+    relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
     socket =
       socket
       |> assign(:type_filter, type)
+      |> assign(:relationships, relationships)
       |> stream(:entities, entities, reset: true)
 
     {:noreply, socket}
@@ -88,7 +98,14 @@ defmodule ConeziaWeb.EntityLive.Index do
 
   @impl true
   def handle_info({ConeziaWeb.EntityLive.FormComponent, {:saved, entity}}, socket) do
-    {:noreply, stream_insert(socket, :entities, entity, at: 0)}
+    user = socket.assigns.current_user
+    relationship = Entities.get_relationship_for_entity(user.id, entity.id)
+    relationships = Map.put(socket.assigns.relationships, entity.id, relationship)
+
+    {:noreply,
+     socket
+     |> assign(:relationships, relationships)
+     |> stream_insert(:entities, entity, at: 0)}
   end
 
   @impl true
@@ -156,7 +173,10 @@ defmodule ConeziaWeb.EntityLive.Index do
                       <p class="mt-1 truncate text-sm text-gray-500">{entity.description || "No description"}</p>
                     </div>
                     <div class="mt-2 flex items-center gap-2">
-                      <.badge color={entity_type_color(entity.type)}>{entity.type}</.badge>
+                      <.badge color={entity_type_color(entity.type)}>{entity.type || "person"}</.badge>
+                      <.badge :if={relationship = @relationships[entity.id]} color={relationship_type_color(relationship.type)}>
+                        {relationship_display_label(relationship)}
+                      </.badge>
                       <.health_badge status={health_status(entity)} />
                     </div>
                   </div>
@@ -164,19 +184,23 @@ defmodule ConeziaWeb.EntityLive.Index do
                 <div class="flex items-center gap-2">
                   <.link
                     patch={~p"/connections/#{entity.id}/edit"}
-                    class="text-gray-400 hover:text-gray-500"
+                    class="p-1 text-gray-400 hover:text-gray-600"
+                    title="Edit"
                   >
-                    <span class="hero-pencil-square h-5 w-5" />
+                    <.icon name="hero-pencil-square" class="h-5 w-5" />
+                    <span class="sr-only">Edit</span>
                   </.link>
                   <button
                     phx-click="delete"
                     phx-value-id={entity.id}
                     data-confirm="Are you sure you want to delete this connection?"
-                    class="text-gray-400 hover:text-red-500"
+                    class="p-1 text-gray-400 hover:text-red-500"
+                    title="Delete"
                   >
-                    <span class="hero-trash h-5 w-5" />
+                    <.icon name="hero-trash" class="h-5 w-5" />
+                    <span class="sr-only">Delete</span>
                   </button>
-                  <span class="hero-chevron-right h-5 w-5 text-gray-400" />
+                  <.icon name="hero-chevron-right" class="h-5 w-5 text-gray-400" />
                 </div>
               </div>
             </.link>
@@ -235,4 +259,17 @@ defmodule ConeziaWeb.EntityLive.Index do
   end
 
   defp health_status(_), do: :unknown
+
+  defp relationship_type_color("family"), do: :pink
+  defp relationship_type_color("friend"), do: :green
+  defp relationship_type_color("colleague"), do: :blue
+  defp relationship_type_color("professional"), do: :indigo
+  defp relationship_type_color("community"), do: :purple
+  defp relationship_type_color("service"), do: :yellow
+  defp relationship_type_color(_), do: :gray
+
+  defp relationship_display_label(nil), do: "Connection"
+  defp relationship_display_label(relationship) do
+    Relationship.display_label(relationship)
+  end
 end
