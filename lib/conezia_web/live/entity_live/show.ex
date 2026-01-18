@@ -189,17 +189,17 @@ defmodule ConeziaWeb.EntityLive.Show do
         </div>
         <div class="mt-4 flex items-center gap-2 md:mt-0">
           <.link patch={~p"/connections/#{@entity.id}/edit"}>
-            <.button class="bg-white text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50">
-              <.icon name="hero-pencil-square" class="-ml-0.5 mr-1.5 h-5 w-5" />
+            <.button class="inline-flex items-center !bg-white !text-gray-700 ring-1 ring-gray-300 hover:!bg-gray-50">
+              <.icon name="hero-pencil-square" class="mr-1.5 h-5 w-5" />
               Edit
             </.button>
           </.link>
           <.button
             phx-click="delete"
             data-confirm="Are you sure you want to delete this connection? This action cannot be undone."
-            class="bg-red-600 hover:bg-red-700"
+            class="inline-flex items-center !bg-red-600 hover:!bg-red-700"
           >
-            <.icon name="hero-trash" class="-ml-0.5 mr-1.5 h-5 w-5" />
+            <.icon name="hero-trash" class="mr-1.5 h-5 w-5" />
             Delete
           </.button>
         </div>
