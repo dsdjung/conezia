@@ -180,28 +180,27 @@ defmodule ConeziaWeb.EntityLive.Index do
                   </div>
                 </div>
               </.link>
-              <div class="flex items-center gap-2 ml-4">
+              <div class="flex items-center gap-1 ml-4">
                 <.link
                   patch={~p"/connections/#{entity.id}/edit"}
-                  class="p-2 rounded-md text-gray-500 hover:text-indigo-600 hover:bg-gray-100"
+                  class="inline-flex items-center justify-center p-2 rounded-md border border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-50 hover:text-indigo-600"
                   title="Edit"
                 >
-                  <.icon name="hero-pencil-square" class="h-5 w-5" />
+                  <.icon name="hero-pencil-square" class="h-4 w-4" />
                   <span class="sr-only">Edit</span>
                 </.link>
                 <button
+                  type="button"
                   phx-click="delete"
                   phx-value-id={entity.id}
                   data-confirm="Are you sure you want to delete this connection?"
-                  class="p-2 rounded-md text-gray-500 hover:text-red-600 hover:bg-gray-100"
+                  class="inline-flex items-center justify-center p-2 rounded-md border border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-50 hover:text-red-600"
                   title="Delete"
                 >
-                  <.icon name="hero-trash" class="h-5 w-5" />
+                  <.icon name="hero-trash" class="h-4 w-4" />
                   <span class="sr-only">Delete</span>
                 </button>
-                <.link navigate={~p"/connections/#{entity.id}"} class="p-2 text-gray-400">
-                  <.icon name="hero-chevron-right" class="h-5 w-5" />
-                </.link>
+                <.icon name="hero-chevron-right" class="h-5 w-5 text-gray-400 ml-2" />
               </div>
             </div>
           </li>
