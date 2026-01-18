@@ -1,0 +1,35 @@
+# Docker Compose for Conezia development services
+# Port allocations per ~/PORT_ALLOCATION.md for Personal GitHub projects:
+#   - PostgreSQL: 15442
+#   - Adminer: 18087
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: conezia_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: conezia_dev
+    ports:
+      - "15442:5432"
+    volumes:
+      - conezia_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: conezia_adminer
+    ports:
+      - "18087:8080"
+    depends_on:
+      - db
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+
+volumes:
+  conezia_postgres_data:
