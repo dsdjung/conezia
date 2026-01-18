@@ -29,3 +29,5 @@ conezia-*.tar
 .env
 .env.local
 
+.client_secret.apps.googleusercontent.com.json
+.elixir_ls/
