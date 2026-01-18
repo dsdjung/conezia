@@ -23,14 +23,39 @@ defmodule Conezia.Storage.Local do
     filename = get_filename(upload)
     storage_key = Conezia.Storage.generate_key(filename, Map.to_list(metadata))
 
-    dest_path = Path.join(base_path(), storage_key)
-    dest_dir = Path.dirname(dest_path)
+    case safe_path(storage_key) do
+      {:ok, dest_path} ->
+        dest_dir = Path.dirname(dest_path)
 
-    with :ok <- File.mkdir_p(dest_dir),
-         :ok <- copy_file(upload, dest_path) do
-      {:ok, storage_key}
+        with :ok <- File.mkdir_p(dest_dir),
+             :ok <- copy_file(upload, dest_path) do
+          {:ok, storage_key}
+        else
+          {:error, reason} -> {:error, reason}
+        end
+
+      {:error, :path_traversal} ->
+        {:error, :invalid_storage_key}
+    end
+  end
+
+  # Validate that the storage key doesn't attempt path traversal
+  defp safe_path(storage_key) do
+    # Reject any path traversal attempts
+    if String.contains?(storage_key, "..") or
+       String.starts_with?(storage_key, "/") or
+       String.contains?(storage_key, "\0") do
+      {:error, :path_traversal}
     else
-      {:error, reason} -> {:error, reason}
+      base = Path.expand(base_path())
+      full_path = Path.expand(Path.join(base, storage_key))
+
+      # Ensure the expanded path is still within base_path
+      if String.starts_with?(full_path, base <> "/") or full_path == base do
+        {:ok, full_path}
+      else
+        {:error, :path_traversal}
+      end
     end
   end
 
@@ -48,30 +73,40 @@ defmodule Conezia.Storage.Local do
 
   @impl true
   def get(storage_key) do
-    path = Path.join(base_path(), storage_key)
+    case safe_path(storage_key) do
+      {:ok, path} ->
+        case File.read(path) do
+          {:ok, content} -> {:ok, content}
+          {:error, :enoent} -> {:error, :not_found}
+          {:error, reason} -> {:error, reason}
+        end
 
-    case File.read(path) do
-      {:ok, content} -> {:ok, content}
-      {:error, :enoent} -> {:error, :not_found}
-      {:error, reason} -> {:error, reason}
+      {:error, :path_traversal} ->
+        {:error, :invalid_storage_key}
     end
   end
 
   @impl true
   def delete(storage_key) do
-    path = Path.join(base_path(), storage_key)
+    case safe_path(storage_key) do
+      {:ok, path} ->
+        case File.rm(path) do
+          :ok -> :ok
+          {:error, :enoent} -> :ok  # Already deleted
+          {:error, reason} -> {:error, reason}
+        end
 
-    case File.rm(path) do
-      :ok -> :ok
-      {:error, :enoent} -> :ok  # Already deleted
-      {:error, reason} -> {:error, reason}
+      {:error, :path_traversal} ->
+        {:error, :invalid_storage_key}
     end
   end
 
   @impl true
   def exists?(storage_key) do
-    path = Path.join(base_path(), storage_key)
-    File.exists?(path)
+    case safe_path(storage_key) do
+      {:ok, path} -> File.exists?(path)
+      {:error, :path_traversal} -> false
+    end
   end
 
   @impl true
@@ -125,8 +160,9 @@ defmodule Conezia.Storage.Local do
 
   @doc """
   Get the full file path for a storage key.
+  Returns {:ok, path} or {:error, :invalid_storage_key} if path traversal is detected.
   """
   def file_path(storage_key) do
-    Path.join(base_path(), storage_key)
+    safe_path(storage_key)
   end
 end

@@ -219,9 +219,9 @@ defmodule ConeziaWeb.ExternalAccountController do
     end
   end
 
-  defp encrypt_token(token) do
-    # TODO: Implement proper encryption using a key from config
-    # For now, just return the token (NOT FOR PRODUCTION)
-    token || ""
+  # Handle nil tokens (e.g., when refresh_token is not provided by OAuth provider)
+  defp encrypt_token(token) when is_nil(token), do: nil
+  defp encrypt_token(token) when is_binary(token) do
+    Conezia.Vault.encrypt(token)
   end
 end

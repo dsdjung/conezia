@@ -66,7 +66,45 @@ if config_env() == :prod do
       # for details about using IPv6 vs IPv4 and loopback vs public addresses.
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
-    secret_key_base: secret_key_base
+    secret_key_base: secret_key_base,
+    force_ssl: [hsts: true]
+
+  # Guardian JWT secret - REQUIRED for authentication
+  guardian_secret =
+    System.get_env("GUARDIAN_SECRET_KEY") ||
+      raise """
+      environment variable GUARDIAN_SECRET_KEY is missing.
+      You can generate one by calling: mix phx.gen.secret
+      """
+
+  config :conezia, Conezia.Guardian,
+    issuer: "conezia",
+    secret_key: guardian_secret
+
+  # Vault encryption key - REQUIRED for field-level encryption
+  vault_secret =
+    System.get_env("VAULT_SECRET_KEY") ||
+      raise """
+      environment variable VAULT_SECRET_KEY is missing.
+      This must be exactly 32 bytes. You can generate one with:
+      :crypto.strong_rand_bytes(32) |> Base.encode64()
+      """
+
+  # Ensure vault key is exactly 32 bytes
+  vault_key = case Base.decode64(vault_secret) do
+    {:ok, key} when byte_size(key) == 32 -> key
+    {:ok, key} ->
+      raise "VAULT_SECRET_KEY must decode to exactly 32 bytes, got #{byte_size(key)}"
+    :error ->
+      if byte_size(vault_secret) == 32 do
+        vault_secret
+      else
+        raise "VAULT_SECRET_KEY must be 32 bytes or base64-encoded 32 bytes"
+      end
+  end
+
+  config :conezia, Conezia.Vault,
+    secret_key: vault_key
 
   # ## SSL Support
   #

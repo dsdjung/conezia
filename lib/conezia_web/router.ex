@@ -4,6 +4,7 @@ defmodule ConeziaWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug ConeziaWeb.Plugs.RequestId
+    plug ConeziaWeb.Plugs.SecurityHeaders
   end
 
   pipeline :authenticated do
@@ -19,17 +20,54 @@ defmodule ConeziaWeb.Router do
     plug ConeziaWeb.Plugs.RateLimiter, :rate_limit
   end
 
-  # Public authentication endpoints
+  pipeline :auth_rate_limited_login do
+    plug ConeziaWeb.Plugs.AuthRateLimiter, action: :login
+  end
+
+  pipeline :auth_rate_limited_register do
+    plug ConeziaWeb.Plugs.AuthRateLimiter, action: :register
+  end
+
+  pipeline :auth_rate_limited_forgot_password do
+    plug ConeziaWeb.Plugs.AuthRateLimiter, action: :forgot_password
+  end
+
+  pipeline :auth_rate_limited_verify do
+    plug ConeziaWeb.Plugs.AuthRateLimiter, action: :verify_email
+  end
+
+  # Public authentication endpoints with strict rate limiting
   scope "/api/v1/auth", ConeziaWeb do
     pipe_through [:api, :rate_limited]
 
-    post "/register", AuthController, :register
-    post "/login", AuthController, :login
+    # Login - strictest limits (5/minute)
+    scope "/" do
+      pipe_through [:auth_rate_limited_login]
+      post "/login", AuthController, :login
+    end
+
+    # Registration - moderate limits (10/hour)
+    scope "/" do
+      pipe_through [:auth_rate_limited_register]
+      post "/register", AuthController, :register
+    end
+
+    # Password reset - strict limits (3/hour)
+    scope "/" do
+      pipe_through [:auth_rate_limited_forgot_password]
+      post "/forgot-password", AuthController, :forgot_password
+      post "/reset-password", AuthController, :reset_password
+    end
+
+    # Email verification - moderate limits (5/hour)
+    scope "/" do
+      pipe_through [:auth_rate_limited_verify]
+      post "/verify-email", AuthController, :verify_email
+    end
+
+    # Other auth endpoints with standard rate limiting
     post "/google", AuthController, :google_oauth
     post "/refresh", AuthController, :refresh
-    post "/forgot-password", AuthController, :forgot_password
-    post "/reset-password", AuthController, :reset_password
-    post "/verify-email", AuthController, :verify_email
   end
 
   # Authenticated auth endpoints

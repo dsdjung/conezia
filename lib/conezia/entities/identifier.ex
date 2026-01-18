@@ -35,8 +35,8 @@ defmodule Conezia.Entities.Identifier do
     |> validate_inclusion(:type, @identifier_types)
     |> validate_length(:label, max: 64)
     |> validate_identifier_value()
-    |> encrypt_sensitive_value()
-    |> hash_value_for_duplicate_detection()
+    |> hash_value_for_duplicate_detection()  # Hash before encryption so we have the plaintext
+    |> encrypt_sensitive_value()             # Encrypt sensitive values after hashing
     |> foreign_key_constraint(:entity_id)
   end
 
@@ -96,19 +96,37 @@ defmodule Conezia.Entities.Identifier do
     value = get_change(changeset, :value)
 
     if type in @sensitive_types and value do
+      # Encrypt sensitive values (SSN, government_id, account_number) using Vault
+      encrypted = Conezia.Vault.encrypt(value)
+
       changeset
-      |> put_change(:value_encrypted, value)
+      |> put_change(:value_encrypted, encrypted)
       |> put_change(:value, nil)
     else
       changeset
     end
   end
 
+  @doc """
+  Decrypt the sensitive value from an identifier.
+  Returns nil for non-sensitive types or if decryption fails.
+  """
+  def decrypt_value(%__MODULE__{type: type, value_encrypted: encrypted}) when type in @sensitive_types do
+    case Conezia.Vault.decrypt(encrypted) do
+      {:ok, plaintext} -> plaintext
+      {:error, _} -> nil
+    end
+  end
+  def decrypt_value(%__MODULE__{value: value}), do: value
+
   defp hash_value_for_duplicate_detection(changeset) do
-    value = get_change(changeset, :value) || get_change(changeset, :value_encrypted)
+    type = get_field(changeset, :type)
+    value = get_change(changeset, :value)
 
     if value do
-      hash = :crypto.hash(:sha256, value) |> Base.encode16(case: :lower)
+      # Use blind index for consistent, searchable hashing
+      # This is called before encryption, so value is still plaintext
+      hash = Conezia.Vault.blind_index(value, "identifier_#{type}")
       put_change(changeset, :value_hash, hash)
     else
       changeset
