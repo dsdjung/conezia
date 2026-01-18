@@ -268,7 +268,7 @@ defmodule ConeziaWeb.EntityController do
           cursor: params["cursor"]
         ]
 
-        {interactions, meta} = Conezia.Interactions.list_interactions_for_entity(id, opts)
+        {interactions, meta} = Conezia.Interactions.list_interactions_for_entity(id, user.id, opts)
 
         conn
         |> put_status(:ok)
@@ -326,7 +326,7 @@ defmodule ConeziaWeb.EntityController do
           cursor: params["cursor"]
         ]
 
-        {conversations, meta} = Conezia.Communications.list_conversations_for_entity(id, opts)
+        {conversations, meta} = Conezia.Communications.list_conversations_for_entity(id, user.id, opts)
 
         conn
         |> put_status(:ok)
@@ -356,7 +356,7 @@ defmodule ConeziaWeb.EntityController do
           cursor: params["cursor"]
         ]
 
-        {reminders, meta} = Conezia.Reminders.list_reminders_for_entity(id, opts)
+        {reminders, meta} = Conezia.Reminders.list_reminders_for_entity(id, user.id, opts)
 
         conn
         |> put_status(:ok)
@@ -386,7 +386,7 @@ defmodule ConeziaWeb.EntityController do
           cursor: params["cursor"]
         ]
 
-        {attachments, meta} = Conezia.Attachments.list_attachments_for_entity(id, opts)
+        {attachments, meta} = Conezia.Attachments.list_attachments_for_entity(id, user.id, opts)
 
         conn
         |> put_status(:ok)

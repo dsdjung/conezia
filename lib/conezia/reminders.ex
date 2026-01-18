@@ -141,11 +141,11 @@ defmodule Conezia.Reminders do
     |> Repo.update()
   end
 
-  def list_reminders_for_entity(entity_id, opts \\ []) do
+  def list_reminders_for_entity(entity_id, user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
 
     reminders = from(r in Reminder,
-      where: r.entity_id == ^entity_id,
+      where: r.entity_id == ^entity_id and r.user_id == ^user_id,
       order_by: [asc: r.due_at],
       limit: ^limit,
       preload: [:entity]

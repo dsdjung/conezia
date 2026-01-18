@@ -155,11 +155,11 @@ defmodule Conezia.Interactions do
     end
   end
 
-  def list_interactions_for_entity(entity_id, opts \\ []) do
+  def list_interactions_for_entity(entity_id, user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
 
     interactions = from(i in Interaction,
-      where: i.entity_id == ^entity_id,
+      where: i.entity_id == ^entity_id and i.user_id == ^user_id,
       order_by: [desc: i.occurred_at],
       limit: ^limit,
       preload: [:entity]

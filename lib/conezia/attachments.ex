@@ -17,9 +17,9 @@ defmodule Conezia.Attachments do
     |> Repo.one()
   end
 
-  def list_attachments_for_entity(entity_id) do
+  def list_attachments_for_entity(entity_id, user_id) do
     Attachment
-    |> where([a], a.entity_id == ^entity_id and is_nil(a.deleted_at))
+    |> where([a], a.entity_id == ^entity_id and a.user_id == ^user_id and is_nil(a.deleted_at))
     |> order_by([a], desc: a.inserted_at)
     |> Repo.all()
   end
@@ -57,11 +57,11 @@ defmodule Conezia.Attachments do
     Repo.delete(attachment)
   end
 
-  def list_attachments_for_entity(entity_id, opts) when is_list(opts) do
+  def list_attachments_for_entity(entity_id, user_id, opts) when is_list(opts) do
     limit = Keyword.get(opts, :limit, 50)
 
     attachments = Attachment
-    |> where([a], a.entity_id == ^entity_id and is_nil(a.deleted_at))
+    |> where([a], a.entity_id == ^entity_id and a.user_id == ^user_id and is_nil(a.deleted_at))
     |> order_by([a], desc: a.inserted_at)
     |> limit(^limit)
     |> Repo.all()

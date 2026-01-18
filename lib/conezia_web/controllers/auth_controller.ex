@@ -12,10 +12,13 @@ defmodule ConeziaWeb.AuthController do
   POST /api/v1/auth/register
   Register a new user with email and password.
   """
+  # JWT tokens expire after 1 hour
+  @token_ttl {1, :hour}
+
   def register(conn, params) do
     case Accounts.create_user(params) do
       {:ok, user} ->
-        {:ok, token, _claims} = Guardian.encode_and_sign(user)
+        {:ok, token, _claims} = Guardian.encode_and_sign(user, %{}, ttl: @token_ttl)
 
         conn
         |> put_status(:created)
@@ -40,30 +43,54 @@ defmodule ConeziaWeb.AuthController do
   POST /api/v1/auth/login
   Login with email and password.
   """
+  @max_failed_attempts 10
+
   def login(conn, %{"email" => email, "password" => password}) do
-    case Accounts.authenticate_by_email_password(email, password) do
-      {:ok, user} ->
-        {:ok, token, _claims} = Guardian.encode_and_sign(user)
+    alias ConeziaWeb.Plugs.AuthRateLimiter
 
-        conn
-        |> put_status(:ok)
-        |> json(%{
-          data: %{
-            user: user_json(user),
-            token: token_json(token)
-          }
-        })
+    # Check if account is locked due to too many failed attempts
+    failed_count = AuthRateLimiter.failed_login_count(email)
 
-      {:error, :invalid_credentials} ->
-        conn
-        |> put_status(:unauthorized)
-        |> json(ErrorHelpers.error_response(
-          :invalid_credentials,
-          "Invalid credentials",
-          401,
-          "The email or password is incorrect.",
-          instance: conn.request_path
-        ))
+    if failed_count >= @max_failed_attempts do
+      conn
+      |> put_status(:too_many_requests)
+      |> json(ErrorHelpers.error_response(
+        :account_locked,
+        "Account Temporarily Locked",
+        429,
+        "Too many failed login attempts. Please try again later or reset your password.",
+        instance: conn.request_path
+      ))
+    else
+      case Accounts.authenticate_by_email_password(email, password) do
+        {:ok, user} ->
+          # Clear failed login attempts on successful login
+          AuthRateLimiter.clear_failed_logins(email)
+          {:ok, token, _claims} = Guardian.encode_and_sign(user, %{}, ttl: @token_ttl)
+
+          conn
+          |> put_status(:ok)
+          |> json(%{
+            data: %{
+              user: user_json(user),
+              token: token_json(token)
+            }
+          })
+
+        {:error, :invalid_credentials} ->
+          # Record failed login attempt
+          AuthRateLimiter.record_failed_login(email)
+
+          conn
+          |> put_status(:unauthorized)
+          |> json(ErrorHelpers.error_response(
+            :invalid_credentials,
+            "Invalid credentials",
+            401,
+            "The email or password is incorrect.",
+            instance: conn.request_path
+          ))
+      end
     end
   end
 
@@ -80,7 +107,7 @@ defmodule ConeziaWeb.AuthController do
   def google_oauth(conn, %{"code" => code, "redirect_uri" => redirect_uri}) do
     case exchange_google_code(code, redirect_uri) do
       {:ok, user, is_new} ->
-        {:ok, token, _claims} = Guardian.encode_and_sign(user)
+        {:ok, token, _claims} = Guardian.encode_and_sign(user, %{}, ttl: @token_ttl)
 
         status = if is_new, do: :created, else: :ok
 

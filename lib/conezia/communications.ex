@@ -173,11 +173,11 @@ defmodule Conezia.Communications do
     end
   end
 
-  def list_conversations_for_entity(entity_id, opts \\ []) do
+  def list_conversations_for_entity(entity_id, user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
 
     conversations = from(c in Conversation,
-      where: c.entity_id == ^entity_id,
+      where: c.entity_id == ^entity_id and c.user_id == ^user_id,
       order_by: [desc: c.last_message_at],
       limit: ^limit,
       preload: [:entity]
