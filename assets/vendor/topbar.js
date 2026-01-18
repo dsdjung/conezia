@@ -156,8 +156,10 @@
     };
 
   // Export for browsers via global
-  this.topbar = topbar;
-}.call(this, window, document));
+  if (typeof window !== 'undefined') {
+    window.topbar = topbar;
+  }
+}.call(typeof window !== 'undefined' ? window : this, window, document));
 
 // ES module export
 export default topbar;
