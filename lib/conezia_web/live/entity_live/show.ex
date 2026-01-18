@@ -5,7 +5,7 @@ defmodule ConeziaWeb.EntityLive.Show do
   use ConeziaWeb, :live_view
 
   alias Conezia.Entities
-  alias Conezia.Entities.Relationship
+  alias Conezia.Entities.{Relationship, EntityRelationship}
   alias Conezia.Interactions
   alias Conezia.Reminders
 
@@ -23,6 +23,7 @@ defmodule ConeziaWeb.EntityLive.Show do
       entity ->
         relationship = Entities.get_relationship_for_entity(user.id, entity.id)
         custom_fields = Entities.list_custom_fields(entity.id)
+        entity_relationships = Entities.list_entity_relationships_for_entity(entity.id, user.id)
 
         socket =
           socket
@@ -30,10 +31,13 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:entity, entity)
           |> assign(:relationship, relationship)
           |> assign(:custom_fields, custom_fields)
+          |> assign(:entity_relationships, entity_relationships)
           |> assign(:interactions, list_interactions(entity.id, user.id))
           |> assign(:reminders, list_reminders(entity.id, user.id))
           |> assign(:editing_custom_field, nil)
           |> assign(:new_custom_field, nil)
+          |> assign(:adding_entity_relationship, false)
+          |> assign(:available_entities, [])
 
         {:ok, socket}
     end
@@ -131,6 +135,83 @@ defmodule ConeziaWeb.EntityLive.Show do
     end
   end
 
+  # Entity relationship events
+  def handle_event("add_entity_relationship", _params, socket) do
+    user = socket.assigns.current_user
+    entity = socket.assigns.entity
+
+    # Get other entities to choose from (exclude current entity)
+    available_entities = Entities.list_entities(user.id)
+    |> Enum.reject(fn e -> e.id == entity.id end)
+
+    {:noreply,
+     socket
+     |> assign(:adding_entity_relationship, true)
+     |> assign(:available_entities, available_entities)}
+  end
+
+  def handle_event("cancel_add_entity_relationship", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:adding_entity_relationship, false)
+     |> assign(:available_entities, [])}
+  end
+
+  def handle_event("save_entity_relationship", %{"entity_relationship" => params}, socket) do
+    user = socket.assigns.current_user
+    entity = socket.assigns.entity
+
+    attrs = %{
+      user_id: user.id,
+      source_entity_id: entity.id,
+      target_entity_id: params["target_entity_id"],
+      type: params["type"],
+      subtype: params["subtype"],
+      custom_label: params["custom_label"],
+      is_bidirectional: params["is_bidirectional"] == "true",
+      inverse_type: params["inverse_type"],
+      inverse_subtype: params["inverse_subtype"],
+      inverse_custom_label: params["inverse_custom_label"]
+    }
+
+    case Entities.create_entity_relationship(attrs) do
+      {:ok, _rel} ->
+        entity_relationships = Entities.list_entity_relationships_for_entity(entity.id, user.id)
+        {:noreply,
+         socket
+         |> assign(:entity_relationships, entity_relationships)
+         |> assign(:adding_entity_relationship, false)
+         |> assign(:available_entities, [])
+         |> put_flash(:info, "Connection relationship added")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to add connection relationship")}
+    end
+  end
+
+  def handle_event("delete_entity_relationship", %{"id" => id}, socket) do
+    user = socket.assigns.current_user
+    entity = socket.assigns.entity
+
+    case Entities.get_entity_relationship_for_user(id, user.id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Relationship not found")}
+
+      rel ->
+        case Entities.delete_entity_relationship(rel) do
+          {:ok, _} ->
+            entity_relationships = Entities.list_entity_relationships_for_entity(entity.id, user.id)
+            {:noreply,
+             socket
+             |> assign(:entity_relationships, entity_relationships)
+             |> put_flash(:info, "Connection relationship removed")}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to remove relationship")}
+        end
+    end
+  end
+
   @impl true
   def handle_info({ConeziaWeb.EntityLive.FormComponent, {:saved, entity}}, socket) do
     user = socket.assigns.current_user
@@ -222,6 +303,160 @@ defmodule ConeziaWeb.EntityLive.Show do
               </:item>
               <:item title="Created">{format_datetime(@entity.inserted_at)}</:item>
             </.list>
+          </.card>
+
+          <!-- Related Connections (Entity-to-Entity Relationships) -->
+          <.card>
+            <:header>
+              <div class="flex items-center justify-between">
+                <span>Related Connections</span>
+                <button
+                  :if={!@adding_entity_relationship}
+                  phx-click="add_entity_relationship"
+                  class="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                >
+                  Add Relationship →
+                </button>
+              </div>
+            </:header>
+
+            <!-- Add new entity relationship form -->
+            <div :if={@adding_entity_relationship} class="mb-4 p-4 bg-gray-50 rounded-lg">
+              <form phx-submit="save_entity_relationship" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">Related Connection</label>
+                  <select
+                    name="entity_relationship[target_entity_id]"
+                    required
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Select a connection...</option>
+                    <option :for={entity <- @available_entities} value={entity.id}>
+                      {entity.name}
+                    </option>
+                  </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">
+                      How is {@entity.name} related to them?
+                    </label>
+                    <select
+                      name="entity_relationship[type]"
+                      id="entity_rel_type"
+                      phx-change="update_entity_rel_type"
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="">Select type...</option>
+                      <option value="family">Family</option>
+                      <option value="friend">Friend</option>
+                      <option value="colleague">Colleague</option>
+                      <option value="professional">Professional</option>
+                      <option value="community">Community</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">Specific relationship</label>
+                    <select
+                      name="entity_relationship[subtype]"
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="">Select subtype...</option>
+                      <!-- Family subtypes -->
+                      <optgroup label="Family">
+                        <option value="spouse">Spouse</option>
+                        <option value="parent">Parent</option>
+                        <option value="child">Child</option>
+                        <option value="older_sibling">Older Sibling</option>
+                        <option value="younger_sibling">Younger Sibling</option>
+                        <option value="grandparent">Grandparent</option>
+                        <option value="grandchild">Grandchild</option>
+                        <option value="aunt_uncle">Aunt/Uncle</option>
+                        <option value="niece_nephew">Niece/Nephew</option>
+                      </optgroup>
+                      <!-- Friend subtypes -->
+                      <optgroup label="Friends">
+                        <option value="friend">Friend</option>
+                        <option value="classmate">Classmate</option>
+                        <option value="neighbor">Neighbor</option>
+                        <option value="colleague">Colleague</option>
+                      </optgroup>
+                      <!-- Professional subtypes -->
+                      <optgroup label="Professional">
+                        <option value="employer">Employer</option>
+                        <option value="employee">Employee</option>
+                        <option value="manager">Manager</option>
+                        <option value="direct_report">Direct Report</option>
+                        <option value="mentor">Mentor</option>
+                        <option value="mentee">Mentee</option>
+                        <option value="client">Client</option>
+                        <option value="service_provider">Service Provider</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">Custom Label (optional)</label>
+                  <input
+                    type="text"
+                    name="entity_relationship[custom_label]"
+                    placeholder="e.g., Best friend from college"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div class="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    phx-click="cancel_add_entity_relationship"
+                    class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                  >
+                    Save Relationship
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div :if={@entity_relationships == []} class="py-8">
+              <.empty_state>
+                <:icon><span class="hero-users h-10 w-10" /></:icon>
+                <:title>No related connections</:title>
+                <:description>Link this connection to other people or organizations in your network.</:description>
+              </.empty_state>
+            </div>
+
+            <ul :if={@entity_relationships != []} role="list" class="divide-y divide-gray-200">
+              <li :for={rel <- @entity_relationships} class="py-3">
+                <div class="flex items-center justify-between">
+                  <.link
+                    navigate={~p"/connections/#{other_entity_id(rel, @entity.id)}"}
+                    class="flex items-center gap-3 hover:bg-gray-50 -ml-2 pl-2 pr-3 py-1 rounded-md"
+                  >
+                    <.avatar name={other_entity_name(rel, @entity.id)} size={:sm} />
+                    <div>
+                      <p class="text-sm font-medium text-gray-900">{other_entity_name(rel, @entity.id)}</p>
+                      <p class="text-xs text-gray-500">
+                        {EntityRelationship.display_label_for(rel, @entity.id)}
+                      </p>
+                    </div>
+                  </.link>
+                  <button
+                    phx-click="delete_entity_relationship"
+                    phx-value-id={rel.id}
+                    data-confirm="Remove this relationship?"
+                    class="text-gray-400 hover:text-red-500"
+                  >
+                    <.icon name="hero-x-mark" class="h-4 w-4" />
+                  </button>
+                </div>
+              </li>
+            </ul>
           </.card>
 
           <!-- Custom Fields -->
@@ -538,4 +773,17 @@ defmodule ConeziaWeb.EntityLive.Show do
   end
   defp format_field_value(%{value: value}) when not is_nil(value), do: value
   defp format_field_value(_), do: "-"
+
+  # Entity relationship helpers
+  defp other_entity_id(%{source_entity_id: source_id, target_entity_id: target_id}, entity_id) do
+    if entity_id == source_id, do: target_id, else: source_id
+  end
+
+  defp other_entity_name(%{source_entity_id: source_id, source_entity: source, target_entity: target}, entity_id) do
+    if entity_id == source_id do
+      target.name
+    else
+      source.name
+    end
+  end
 end

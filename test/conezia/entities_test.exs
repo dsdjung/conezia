@@ -476,4 +476,298 @@ defmodule Conezia.EntitiesTest do
       assert Enum.any?(fields, fn f -> f.key == "company" end)
     end
   end
+
+  describe "entity_relationships" do
+    alias Conezia.Entities.EntityRelationship
+
+    test "create_entity_relationship/1 creates relationship between two entities" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      attrs = %{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend",
+        subtype: "friend"
+      }
+
+      assert {:ok, %EntityRelationship{} = rel} = Entities.create_entity_relationship(attrs)
+      assert rel.source_entity_id == entity1.id
+      assert rel.target_entity_id == entity2.id
+      assert rel.type == "friend"
+    end
+
+    test "create_entity_relationship/1 with asymmetric relationship sets inverse" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      attrs = %{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "family",
+        subtype: "parent"
+      }
+
+      assert {:ok, %EntityRelationship{} = rel} = Entities.create_entity_relationship(attrs)
+      assert rel.subtype == "parent"
+      assert rel.inverse_subtype == "child"
+      assert rel.is_bidirectional == false
+    end
+
+    test "create_entity_relationship/1 with symmetric relationship stays bidirectional" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      attrs = %{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend",
+        subtype: "friend"
+      }
+
+      assert {:ok, %EntityRelationship{} = rel} = Entities.create_entity_relationship(attrs)
+      assert rel.is_bidirectional == true
+    end
+
+    test "create_entity_relationship/1 fails when source equals target" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+
+      attrs = %{
+        user_id: user.id,
+        source_entity_id: entity.id,
+        target_entity_id: entity.id,
+        type: "friend"
+      }
+
+      assert {:error, changeset} = Entities.create_entity_relationship(attrs)
+      assert {"cannot be the same as source entity", _} = changeset.errors[:target_entity_id]
+    end
+
+    test "list_entity_relationships_for_entity/3 returns relationships for entity" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+      entity3 = insert(:entity, owner: user)
+
+      {:ok, _} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend"
+      })
+      {:ok, _} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity3.id,
+        target_entity_id: entity1.id,
+        type: "colleague"
+      })
+
+      relationships = Entities.list_entity_relationships_for_entity(entity1.id, user.id)
+      assert length(relationships) == 2
+    end
+
+    test "list_entity_relationships_for_entity/3 preloads entities" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user, name: "Alice")
+      entity2 = insert(:entity, owner: user, name: "Bob")
+
+      {:ok, _} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend"
+      })
+
+      [rel] = Entities.list_entity_relationships_for_entity(entity1.id, user.id)
+      assert rel.source_entity.name == "Alice"
+      assert rel.target_entity.name == "Bob"
+    end
+
+    test "get_entity_relationship_between/3 finds relationship in either direction" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      {:ok, created} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend"
+      })
+
+      # Find from source perspective
+      rel1 = Entities.get_entity_relationship_between(user.id, entity1.id, entity2.id)
+      assert rel1.id == created.id
+
+      # Find from target perspective (reverse order)
+      rel2 = Entities.get_entity_relationship_between(user.id, entity2.id, entity1.id)
+      assert rel2.id == created.id
+    end
+
+    test "delete_entity_relationship/1 deletes relationship" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      {:ok, rel} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend"
+      })
+
+      assert {:ok, _} = Entities.delete_entity_relationship(rel)
+      assert is_nil(Entities.get_entity_relationship(rel.id))
+    end
+
+    test "update_entity_relationship/2 updates relationship" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      {:ok, rel} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend"
+      })
+
+      assert {:ok, updated} = Entities.update_entity_relationship(rel, %{custom_label: "Best Friends"})
+      assert updated.custom_label == "Best Friends"
+    end
+
+    test "unique constraint prevents duplicate relationships" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      {:ok, _} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend"
+      })
+
+      # Trying to create the same relationship again should fail
+      assert {:error, changeset} = Entities.create_entity_relationship(%{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "colleague"
+      })
+      assert changeset.errors != []
+    end
+  end
+
+  describe "EntityRelationship display helpers" do
+    alias Conezia.Entities.EntityRelationship
+
+    test "display_label_for_source/1 returns custom_label when present" do
+      rel = %EntityRelationship{
+        type: "friend",
+        subtype: "friend",
+        custom_label: "Best Friend"
+      }
+      assert EntityRelationship.display_label_for_source(rel) == "Best Friend"
+    end
+
+    test "display_label_for_source/1 returns subtype when no custom_label" do
+      rel = %EntityRelationship{
+        type: "family",
+        subtype: "parent",
+        custom_label: nil
+      }
+      assert EntityRelationship.display_label_for_source(rel) == "Parent"
+    end
+
+    test "display_label_for_source/1 returns type when no subtype" do
+      rel = %EntityRelationship{
+        type: "friend",
+        subtype: nil,
+        custom_label: nil
+      }
+      assert EntityRelationship.display_label_for_source(rel) == "Friend"
+    end
+
+    test "display_label_for_target/1 returns same as source for bidirectional" do
+      rel = %EntityRelationship{
+        type: "friend",
+        subtype: "friend",
+        is_bidirectional: true
+      }
+      assert EntityRelationship.display_label_for_target(rel) == "Friend"
+    end
+
+    test "display_label_for_target/1 returns inverse for directional" do
+      rel = %EntityRelationship{
+        type: "family",
+        subtype: "parent",
+        inverse_type: "family",
+        inverse_subtype: "child",
+        is_bidirectional: false
+      }
+      assert EntityRelationship.display_label_for_target(rel) == "Child"
+    end
+
+    test "display_label_for/2 returns correct label based on perspective" do
+      source_id = Ecto.UUID.generate()
+      target_id = Ecto.UUID.generate()
+
+      rel = %EntityRelationship{
+        source_entity_id: source_id,
+        target_entity_id: target_id,
+        type: "family",
+        subtype: "parent",
+        inverse_type: "family",
+        inverse_subtype: "child",
+        is_bidirectional: false
+      }
+
+      # From source perspective: "parent"
+      assert EntityRelationship.display_label_for(rel, source_id) == "Parent"
+
+      # From target perspective: "child"
+      assert EntityRelationship.display_label_for(rel, target_id) == "Child"
+    end
+
+    test "other_entity_id/2 returns the other entity's ID" do
+      source_id = Ecto.UUID.generate()
+      target_id = Ecto.UUID.generate()
+
+      rel = %EntityRelationship{
+        source_entity_id: source_id,
+        target_entity_id: target_id
+      }
+
+      assert EntityRelationship.other_entity_id(rel, source_id) == target_id
+      assert EntityRelationship.other_entity_id(rel, target_id) == source_id
+    end
+
+    test "symmetric_types/0 returns symmetric types" do
+      types = EntityRelationship.symmetric_types()
+      assert "friend" in types
+      assert "colleague" in types
+      assert "neighbor" in types
+    end
+
+    test "asymmetric_pairs/0 returns pairs" do
+      pairs = EntityRelationship.asymmetric_pairs()
+      assert pairs["parent"] == "child"
+      assert pairs["mentor"] == "mentee"
+      assert pairs["employer"] == "employee"
+    end
+
+    test "inverse_of/1 returns inverse subtype" do
+      assert EntityRelationship.inverse_of("parent") == "child"
+      assert EntityRelationship.inverse_of("mentee") == "mentor"
+      assert is_nil(EntityRelationship.inverse_of("friend"))
+    end
+  end
 end

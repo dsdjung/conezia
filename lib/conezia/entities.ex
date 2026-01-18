@@ -4,7 +4,7 @@ defmodule Conezia.Entities do
   """
   import Ecto.Query
   alias Conezia.Repo
-  alias Conezia.Entities.{Entity, Relationship, Identifier, Tag, Group, CustomField}
+  alias Conezia.Entities.{Entity, Relationship, EntityRelationship, Identifier, Tag, Group, CustomField}
 
   # Entity functions
 
@@ -988,6 +988,138 @@ defmodule Conezia.Entities do
   """
   def predefined_custom_fields do
     CustomField.predefined_fields()
+  end
+
+  # Entity Relationship functions (connection-to-connection relationships)
+
+  @doc """
+  Get an entity relationship by ID.
+  """
+  def get_entity_relationship(id), do: Repo.get(EntityRelationship, id)
+
+  @doc """
+  Get an entity relationship by ID, raises if not found.
+  """
+  def get_entity_relationship!(id), do: Repo.get!(EntityRelationship, id)
+
+  @doc """
+  Get an entity relationship for a user by ID.
+  """
+  def get_entity_relationship_for_user(id, user_id) do
+    from(er in EntityRelationship,
+      where: er.id == ^id and er.user_id == ^user_id,
+      preload: [:source_entity, :target_entity]
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  List all entity relationships for a user.
+  """
+  def list_entity_relationships(user_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 100)
+    type = Keyword.get(opts, :type)
+
+    query = from er in EntityRelationship,
+      where: er.user_id == ^user_id,
+      limit: ^limit,
+      preload: [:source_entity, :target_entity],
+      order_by: [desc: er.inserted_at]
+
+    query
+    |> filter_entity_relationship_type(type)
+    |> Repo.all()
+  end
+
+  defp filter_entity_relationship_type(query, nil), do: query
+  defp filter_entity_relationship_type(query, type), do: where(query, [er], er.type == ^type)
+
+  @doc """
+  List all entity relationships for a specific entity.
+  Returns relationships where the entity is either the source or target.
+  """
+  def list_entity_relationships_for_entity(entity_id, user_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
+    from(er in EntityRelationship,
+      where: er.user_id == ^user_id and (er.source_entity_id == ^entity_id or er.target_entity_id == ^entity_id),
+      limit: ^limit,
+      preload: [:source_entity, :target_entity],
+      order_by: [desc: er.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get a specific entity relationship between two entities.
+  Checks both directions since A->B and B->A represent the same relationship.
+  """
+  def get_entity_relationship_between(user_id, entity_id_1, entity_id_2) do
+    from(er in EntityRelationship,
+      where: er.user_id == ^user_id and
+             ((er.source_entity_id == ^entity_id_1 and er.target_entity_id == ^entity_id_2) or
+              (er.source_entity_id == ^entity_id_2 and er.target_entity_id == ^entity_id_1)),
+      preload: [:source_entity, :target_entity]
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Create an entity relationship.
+  """
+  def create_entity_relationship(attrs) do
+    %EntityRelationship{}
+    |> EntityRelationship.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Update an entity relationship.
+  """
+  def update_entity_relationship(%EntityRelationship{} = entity_relationship, attrs) do
+    entity_relationship
+    |> EntityRelationship.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Delete an entity relationship.
+  """
+  def delete_entity_relationship(%EntityRelationship{} = entity_relationship) do
+    Repo.delete(entity_relationship)
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking entity relationship changes.
+  """
+  def change_entity_relationship(%EntityRelationship{} = entity_relationship, attrs \\ %{}) do
+    EntityRelationship.changeset(entity_relationship, attrs)
+  end
+
+  @doc """
+  Get entity relationships grouped by entity for display.
+  Returns a map of entity_id => list of {other_entity, relationship, label}
+  """
+  def get_entity_relationship_map(user_id, entity_ids) when is_list(entity_ids) do
+    relationships = from(er in EntityRelationship,
+      where: er.user_id == ^user_id and
+             (er.source_entity_id in ^entity_ids or er.target_entity_id in ^entity_ids),
+      preload: [:source_entity, :target_entity]
+    )
+    |> Repo.all()
+
+    # Build a map of entity_id => list of related entities with their relationship info
+    Enum.reduce(relationships, %{}, fn rel, acc ->
+      # For each relationship, add entries for both entities involved
+      acc
+      |> add_relationship_entry(rel.source_entity_id, rel.target_entity, EntityRelationship.display_label_for_source(rel), rel)
+      |> add_relationship_entry(rel.target_entity_id, rel.source_entity, EntityRelationship.display_label_for_target(rel), rel)
+    end)
+  end
+
+  defp add_relationship_entry(acc, entity_id, other_entity, label, relationship) do
+    entry = %{other_entity: other_entity, label: label, relationship: relationship}
+    Map.update(acc, entity_id, [entry], fn existing -> [entry | existing] end)
   end
 
 end
