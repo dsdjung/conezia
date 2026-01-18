@@ -28,7 +28,7 @@ config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase
 config :conezia, Oban,
   repo: Conezia.Repo,
   plugins: [Oban.Plugins.Pruner],
-  queues: [default: 10, reminders: 5, imports: 3, webhooks: 5, health: 2]
+  queues: [default: 10, reminders: 5, imports: 3, webhooks: 5, health: 2, sync: 3]
 
 # Configure field-level encryption vault
 # WARNING: Change this key in production and keep it secure!

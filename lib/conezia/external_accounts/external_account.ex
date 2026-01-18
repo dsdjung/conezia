@@ -21,6 +21,8 @@ defmodule Conezia.ExternalAccounts.ExternalAccount do
     field :last_synced_at, :utc_datetime_usec
     field :sync_error, :string
     field :metadata, :map, default: %{}
+    field :token_expires_at, :utc_datetime_usec
+    field :last_token_refresh_at, :utc_datetime_usec
 
     belongs_to :user, Conezia.Accounts.User
     belongs_to :entity, Conezia.Entities.Entity
@@ -30,7 +32,8 @@ defmodule Conezia.ExternalAccounts.ExternalAccount do
 
   @required_fields [:service_name, :account_identifier, :user_id]
   @optional_fields [:credentials, :refresh_token, :status, :scopes, :last_synced_at,
-                    :sync_error, :metadata, :entity_id]
+                    :sync_error, :metadata, :entity_id, :token_expires_at,
+                    :last_token_refresh_at]
 
   def changeset(external_account, attrs) do
     external_account

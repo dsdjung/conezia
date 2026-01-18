@@ -78,7 +78,17 @@ defmodule ConeziaWeb.Router do
       live "/reminders", ReminderLive.Index, :index
       live "/reminders/new", ReminderLive.Index, :new
       live "/reminders/:id/edit", ReminderLive.Index, :edit
+      live "/settings", SettingsLive.Index, :index
+      live "/settings/:tab", SettingsLive.Index, :index
     end
+  end
+
+  # Integration OAuth routes (authenticated)
+  scope "/integrations", ConeziaWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    get "/:service/authorize", IntegrationOAuthController, :authorize
+    get "/:service/callback", IntegrationOAuthController, :callback
   end
 
   # Logout route

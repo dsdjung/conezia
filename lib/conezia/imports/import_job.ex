@@ -25,6 +25,7 @@ defmodule Conezia.Imports.ImportJob do
     field :completed_at, :utc_datetime_usec
 
     belongs_to :user, Conezia.Accounts.User
+    belongs_to :external_account, Conezia.ExternalAccounts.ExternalAccount
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -32,7 +33,7 @@ defmodule Conezia.Imports.ImportJob do
   @required_fields [:source, :user_id]
   @optional_fields [:status, :total_records, :processed_records, :created_records,
                     :merged_records, :skipped_records, :error_log, :file_path,
-                    :started_at, :completed_at]
+                    :started_at, :completed_at, :external_account_id]
 
   def changeset(import_job, attrs) do
     import_job
@@ -46,6 +47,7 @@ defmodule Conezia.Imports.ImportJob do
     |> validate_number(:merged_records, greater_than_or_equal_to: 0)
     |> validate_number(:skipped_records, greater_than_or_equal_to: 0)
     |> foreign_key_constraint(:user_id)
+    |> foreign_key_constraint(:external_account_id)
   end
 
   def start_changeset(import_job) do

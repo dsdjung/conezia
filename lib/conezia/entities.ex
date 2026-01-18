@@ -736,4 +736,48 @@ defmodule Conezia.Entities do
     }
   end
 
+  # External sync helper functions
+
+  @doc """
+  Find an entity by external ID (from external services like Google Contacts).
+  """
+  def find_by_external_id(user_id, external_id) do
+    from(e in Entity,
+      where: e.owner_id == ^user_id,
+      where: fragment("? ->> 'external_id' = ?", e.metadata, ^external_id)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Find an entity by email address.
+  """
+  def find_by_email(user_id, email) do
+    from(e in Entity,
+      join: i in Identifier, on: i.entity_id == e.id,
+      where: e.owner_id == ^user_id and i.type == "email" and i.value == ^email
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Check if an entity has a specific identifier.
+  """
+  def has_identifier?(entity_id, type, value) do
+    from(i in Identifier,
+      where: i.entity_id == ^entity_id and i.type == ^type and i.value == ^value
+    )
+    |> Repo.exists?()
+  end
+
+  @doc """
+  Check if an entity has any identifier of a given type.
+  """
+  def has_identifier_type?(entity_id, type) do
+    from(i in Identifier,
+      where: i.entity_id == ^entity_id and i.type == ^type
+    )
+    |> Repo.exists?()
+  end
+
 end

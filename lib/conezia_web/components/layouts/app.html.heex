@@ -33,6 +33,15 @@
             Reminders
           </.link>
         </li>
+        <li>
+          <.link
+            navigate={~p"/settings"}
+            class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+          >
+            <span class="hero-cog-6-tooth h-6 w-6 shrink-0" />
+            Settings
+          </.link>
+        </li>
       </ul>
     </nav>
   </nav>
@@ -149,6 +158,15 @@
                 >
                   <span class="hero-bell h-6 w-6 shrink-0" />
                   Reminders
+                </.link>
+              </li>
+              <li>
+                <.link
+                  navigate={~p"/settings"}
+                  class="group flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-indigo-200 hover:bg-indigo-600 hover:text-white"
+                >
+                  <span class="hero-cog-6-tooth h-6 w-6 shrink-0" />
+                  Settings
                 </.link>
               </li>
             </ul>
