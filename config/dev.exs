@@ -1,12 +1,12 @@
 import Config
 
 # Configure your database
-# Port 15442 allocated per ~/PORT_ALLOCATION.md for Personal GitHub projects
+# Port 15443 allocated per ~/PORT_ALLOCATION.md for Personal GitHub projects
 config :conezia, Conezia.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  port: 15442,
+  port: 15443,
   database: "conezia_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
@@ -21,8 +21,8 @@ config :conezia, Conezia.Repo,
 config :conezia, ConeziaWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  # Port 14011 allocated per ~/PORT_ALLOCATION.md for Personal GitHub projects
-  http: [ip: {127, 0, 0, 1}, port: 14011],
+  # Port 14013 allocated per ~/PORT_ALLOCATION.md for Personal GitHub projects
+  http: [ip: {127, 0, 0, 1}, port: 14013],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
