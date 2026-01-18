@@ -72,7 +72,7 @@ defmodule Conezia.Factory do
   def relationship_factory do
     %Relationship{
       type: "friend",
-      strength: 50,
+      strength: "regular",
       status: "active",
       health_threshold_days: 30,
       user: build(:user),
@@ -92,7 +92,7 @@ defmodule Conezia.Factory do
   def tag_factory do
     %Tag{
       name: sequence(:tag_name, &"tag-#{&1}"),
-      color: "#3B82F6",
+      color: "blue",
       user: build(:user)
     }
   end

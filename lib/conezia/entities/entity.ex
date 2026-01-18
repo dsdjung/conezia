@@ -22,6 +22,7 @@ defmodule Conezia.Entities.Entity do
     belongs_to :owner, Conezia.Accounts.User
     has_many :relationships, Conezia.Entities.Relationship
     has_many :identifiers, Conezia.Entities.Identifier
+    has_many :custom_fields, Conezia.Entities.CustomField
     has_many :interactions, Conezia.Interactions.Interaction
     has_many :conversations, Conezia.Communications.Conversation
     has_many :reminders, Conezia.Reminders.Reminder

@@ -211,6 +211,7 @@ defmodule ConeziaWeb.EntityLive.Index do
           title="New Connection"
           action={@live_action}
           entity={@entity}
+          relationship={nil}
           current_user={@current_user}
           patch={~p"/connections"}
         />
@@ -223,10 +224,12 @@ defmodule ConeziaWeb.EntityLive.Index do
   defp entity_type_color("organization"), do: :indigo
   defp entity_type_color(_), do: :gray
 
-  defp health_status(%{health_score: score}) when is_number(score) do
+  defp health_status(%{last_interaction_at: last_interaction}) when not is_nil(last_interaction) do
+    days_since = DateTime.diff(DateTime.utc_now(), last_interaction, :day)
+
     cond do
-      score >= 70 -> :healthy
-      score >= 40 -> :attention
+      days_since <= 30 -> :healthy
+      days_since <= 90 -> :attention
       true -> :critical
     end
   end

@@ -2,7 +2,7 @@ defmodule Conezia.EntitiesTest do
   use Conezia.DataCase, async: true
 
   alias Conezia.Entities
-  alias Conezia.Entities.{Entity, Relationship, Identifier, Tag, Group}
+  alias Conezia.Entities.{Entity, Relationship, Identifier, Tag, Group, CustomField}
 
   import Conezia.Factory
 
@@ -96,16 +96,47 @@ defmodule Conezia.EntitiesTest do
     test "create_relationship/1 creates relationship" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
-      attrs = %{user_id: user.id, entity_id: entity.id, type: "friend", strength: 75}
+      attrs = %{user_id: user.id, entity_id: entity.id, type: "friend", strength: "close"}
       assert {:ok, %Relationship{}} = Entities.create_relationship(attrs)
+    end
+
+    test "create_relationship/1 with subtype creates relationship" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      attrs = %{user_id: user.id, entity_id: entity.id, type: "family", subtype: "spouse", strength: "close"}
+      assert {:ok, %Relationship{} = rel} = Entities.create_relationship(attrs)
+      assert rel.type == "family"
+      assert rel.subtype == "spouse"
+    end
+
+    test "create_relationship/1 with custom_label creates relationship" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      attrs = %{user_id: user.id, entity_id: entity.id, type: "colleague", custom_label: "Team Lead", strength: "regular"}
+      assert {:ok, %Relationship{} = rel} = Entities.create_relationship(attrs)
+      assert rel.custom_label == "Team Lead"
     end
 
     test "update_relationship/2 updates relationship" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
       relationship = insert(:relationship, user: user, entity: entity)
-      assert {:ok, updated} = Entities.update_relationship(relationship, %{strength: 90})
-      assert updated.strength == 90
+      assert {:ok, updated} = Entities.update_relationship(relationship, %{strength: "close"})
+      assert updated.strength == "close"
+    end
+
+    test "update_relationship/2 updates subtype and custom_label" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      relationship = insert(:relationship, user: user, entity: entity, type: "friend")
+      assert {:ok, updated} = Entities.update_relationship(relationship, %{
+        type: "family",
+        subtype: "sibling",
+        custom_label: "Twin"
+      })
+      assert updated.type == "family"
+      assert updated.subtype == "sibling"
+      assert updated.custom_label == "Twin"
     end
 
     test "list_relationships/2 returns user relationships" do
@@ -117,6 +148,45 @@ defmodule Conezia.EntitiesTest do
 
       relationships = Entities.list_relationships(user.id)
       assert length(relationships) == 2
+    end
+  end
+
+  describe "relationship subtypes" do
+    test "valid family subtypes" do
+      valid_subtypes = Relationship.subtypes_for_type("family")
+      assert "spouse" in valid_subtypes
+      assert "child" in valid_subtypes
+      assert "parent" in valid_subtypes
+      assert "sibling" in valid_subtypes
+    end
+
+    test "valid colleague subtypes" do
+      valid_subtypes = Relationship.subtypes_for_type("colleague")
+      assert "coworker" in valid_subtypes
+      assert "manager" in valid_subtypes
+      assert "direct_report" in valid_subtypes
+    end
+
+    test "valid professional subtypes" do
+      valid_subtypes = Relationship.subtypes_for_type("professional")
+      assert "client" in valid_subtypes
+      assert "vendor" in valid_subtypes
+      assert "consultant" in valid_subtypes
+    end
+
+    test "display_label returns custom_label when present" do
+      relationship = %Relationship{type: "friend", subtype: nil, custom_label: "Best Friend"}
+      assert Relationship.display_label(relationship) == "Best Friend"
+    end
+
+    test "display_label returns subtype when no custom_label" do
+      relationship = %Relationship{type: "family", subtype: "spouse", custom_label: nil}
+      assert Relationship.display_label(relationship) == "Spouse"
+    end
+
+    test "display_label returns type when no subtype or custom_label" do
+      relationship = %Relationship{type: "friend", subtype: nil, custom_label: nil}
+      assert Relationship.display_label(relationship) == "Friend"
     end
   end
 
@@ -151,7 +221,7 @@ defmodule Conezia.EntitiesTest do
   describe "tags" do
     test "create_tag/1 creates tag" do
       user = insert(:user)
-      attrs = %{name: "important", color: "#FF0000", user_id: user.id}
+      attrs = %{name: "important", color: "red", user_id: user.id}
       assert {:ok, %Tag{}} = Entities.create_tag(attrs)
     end
 
@@ -230,6 +300,161 @@ defmodule Conezia.EntitiesTest do
 
       {members, _meta} = Entities.list_group_members(group, limit: 50)
       assert length(members) == 1
+    end
+  end
+
+  describe "custom_fields" do
+    test "create_custom_field/1 creates text field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      attrs = %{
+        entity_id: entity.id,
+        field_type: "text",
+        category: "personal",
+        name: "Nickname",
+        key: "nickname",
+        value: "Bobby"
+      }
+      assert {:ok, %CustomField{} = field} = Entities.create_custom_field(attrs)
+      assert field.name == "Nickname"
+      assert field.value == "Bobby"
+      assert field.field_type == "text"
+    end
+
+    test "create_custom_field/1 creates date field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      attrs = %{
+        entity_id: entity.id,
+        field_type: "date",
+        category: "important_dates",
+        name: "Birthday",
+        key: "birthday",
+        date_value: ~D[1990-05-15],
+        is_recurring: true
+      }
+      assert {:ok, %CustomField{} = field} = Entities.create_custom_field(attrs)
+      assert field.date_value == ~D[1990-05-15]
+      assert field.is_recurring == true
+    end
+
+    test "create_custom_field/1 creates number field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      attrs = %{
+        entity_id: entity.id,
+        field_type: "number",
+        category: "other",
+        name: "Shoe Size",
+        key: "shoe_size",
+        number_value: Decimal.new("10.5")
+      }
+      assert {:ok, %CustomField{} = field} = Entities.create_custom_field(attrs)
+      assert Decimal.equal?(field.number_value, Decimal.new("10.5"))
+    end
+
+    test "create_custom_field/1 creates boolean field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      attrs = %{
+        entity_id: entity.id,
+        field_type: "boolean",
+        category: "preferences",
+        name: "Prefers Text",
+        key: "prefers_text",
+        boolean_value: true
+      }
+      assert {:ok, %CustomField{} = field} = Entities.create_custom_field(attrs)
+      assert field.boolean_value == true
+    end
+
+    test "list_custom_fields/1 returns fields for entity" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, _} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "personal", name: "Nick", key: "nick", value: "Bobby"})
+      {:ok, _} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "date", category: "important_dates", name: "Birthday", key: "birthday", date_value: ~D[1990-01-01]})
+
+      fields = Entities.list_custom_fields(entity.id)
+      assert length(fields) == 2
+    end
+
+    test "list_custom_fields/2 filters by category" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, _} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "personal", name: "Nick", key: "nick", value: "Bobby"})
+      {:ok, _} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "date", category: "important_dates", name: "Birthday", key: "birthday", date_value: ~D[1990-01-01]})
+
+      fields = Entities.list_custom_fields(entity.id, category: "important_dates")
+      assert length(fields) == 1
+      assert hd(fields).name == "Birthday"
+    end
+
+    test "update_custom_field/2 updates field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, field} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "personal", name: "Nick", key: "nick", value: "Bobby"})
+
+      assert {:ok, updated} = Entities.update_custom_field(field, %{value: "Bob"})
+      assert updated.value == "Bob"
+    end
+
+    test "delete_custom_field/1 deletes field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, field} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "personal", name: "Nick", key: "nick", value: "Bobby"})
+
+      assert {:ok, _} = Entities.delete_custom_field(field)
+      assert is_nil(Entities.get_custom_field(field.id))
+    end
+
+    test "get_custom_field_by_key/2 returns field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, _} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "personal", name: "Nick", key: "nickname", value: "Bobby"})
+
+      field = Entities.get_custom_field_by_key(entity.id, "nickname")
+      assert field.value == "Bobby"
+    end
+
+    test "set_custom_field/4 creates new field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+
+      assert {:ok, field} = Entities.set_custom_field(entity.id, "company", "Acme Inc", category: "work")
+      assert field.value == "Acme Inc"
+      assert field.category == "work"
+    end
+
+    test "set_custom_field/4 updates existing field" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, _} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "work", name: "Company", key: "company", value: "Old Corp"})
+
+      assert {:ok, field} = Entities.set_custom_field(entity.id, "company", "New Inc")
+      assert field.value == "New Inc"
+
+      # Should still only have one field with that key
+      fields = Entities.list_custom_fields(entity.id)
+      company_fields = Enum.filter(fields, & &1.key == "company")
+      assert length(company_fields) == 1
+    end
+
+    test "unique constraint on entity_id + key" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, _} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "personal", name: "Nick", key: "nick", value: "Bobby"})
+
+      # Attempting to create another field with the same entity_id + key should fail
+      assert {:error, changeset} = Entities.create_custom_field(%{entity_id: entity.id, field_type: "text", category: "personal", name: "Nickname", key: "nick", value: "Robert"})
+      # The unique constraint violation shows on entity_id since that's the first field in the composite key
+      assert changeset.errors != []
+    end
+
+    test "predefined_custom_fields/0 returns predefined fields" do
+      fields = Entities.predefined_custom_fields()
+      assert is_list(fields)
+      assert Enum.any?(fields, fn f -> f.key == "birthday" end)
+      assert Enum.any?(fields, fn f -> f.key == "company" end)
     end
   end
 end

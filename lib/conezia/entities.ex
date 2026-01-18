@@ -4,7 +4,7 @@ defmodule Conezia.Entities do
   """
   import Ecto.Query
   alias Conezia.Repo
-  alias Conezia.Entities.{Entity, Relationship, Identifier, Tag, Group}
+  alias Conezia.Entities.{Entity, Relationship, Identifier, Tag, Group, CustomField}
 
   # Entity functions
 
@@ -778,6 +778,204 @@ defmodule Conezia.Entities do
       where: i.entity_id == ^entity_id and i.type == ^type
     )
     |> Repo.exists?()
+  end
+
+  # Custom Field functions
+
+  @doc """
+  Get a custom field by ID.
+  """
+  def get_custom_field(id), do: Repo.get(CustomField, id)
+
+  @doc """
+  Get a custom field by ID, raises if not found.
+  """
+  def get_custom_field!(id), do: Repo.get!(CustomField, id)
+
+  @doc """
+  List all custom fields for an entity.
+  """
+  def list_custom_fields(entity_id, opts \\ []) do
+    category = Keyword.get(opts, :category)
+    field_type = Keyword.get(opts, :field_type)
+
+    query = from cf in CustomField,
+      where: cf.entity_id == ^entity_id,
+      order_by: [asc: cf.category, asc: cf.name]
+
+    query
+    |> filter_custom_field_category(category)
+    |> filter_custom_field_type(field_type)
+    |> Repo.all()
+  end
+
+  defp filter_custom_field_category(query, nil), do: query
+  defp filter_custom_field_category(query, category), do: where(query, [cf], cf.category == ^category)
+
+  defp filter_custom_field_type(query, nil), do: query
+  defp filter_custom_field_type(query, field_type), do: where(query, [cf], cf.field_type == ^field_type)
+
+  @doc """
+  Create a custom field for an entity.
+  """
+  def create_custom_field(attrs) do
+    %CustomField{}
+    |> CustomField.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Update a custom field.
+  """
+  def update_custom_field(%CustomField{} = custom_field, attrs) do
+    custom_field
+    |> CustomField.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Delete a custom field.
+  """
+  def delete_custom_field(%CustomField{} = custom_field) do
+    Repo.delete(custom_field)
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking custom field changes.
+  """
+  def change_custom_field(%CustomField{} = custom_field, attrs \\ %{}) do
+    CustomField.changeset(custom_field, attrs)
+  end
+
+  @doc """
+  Get a custom field by entity and key.
+  """
+  def get_custom_field_by_key(entity_id, key) do
+    from(cf in CustomField,
+      where: cf.entity_id == ^entity_id and cf.key == ^key
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Set a custom field value by key (creates or updates).
+  """
+  def set_custom_field(entity_id, key, value, opts \\ []) do
+    case get_custom_field_by_key(entity_id, key) do
+      nil ->
+        attrs = %{
+          entity_id: entity_id,
+          key: key,
+          name: Keyword.get(opts, :name, humanize_key(key)),
+          field_type: Keyword.get(opts, :field_type, infer_field_type(value)),
+          category: Keyword.get(opts, :category, "personal"),
+          is_recurring: Keyword.get(opts, :is_recurring, false),
+          reminder_days_before: Keyword.get(opts, :reminder_days_before),
+          visibility: Keyword.get(opts, :visibility, "private")
+        }
+        |> put_typed_value(value)
+
+        create_custom_field(attrs)
+
+      existing ->
+        attrs = put_typed_value(%{}, value)
+        update_custom_field(existing, attrs)
+    end
+  end
+
+  defp humanize_key(key) when is_binary(key) do
+    key
+    |> String.replace("_", " ")
+    |> String.split()
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+
+  defp infer_field_type(value) when is_binary(value) do
+    cond do
+      String.match?(value, ~r/^\d{4}-\d{2}-\d{2}$/) -> "date"
+      String.match?(value, ~r/^https?:\/\//) -> "url"
+      String.match?(value, ~r/^[^\s]+@[^\s]+\.[^\s]+$/) -> "email"
+      String.match?(value, ~r/^\+?[\d\s()-]+$/) -> "phone"
+      true -> "text"
+    end
+  end
+  defp infer_field_type(%Date{}), do: "date"
+  defp infer_field_type(value) when is_number(value), do: "number"
+  defp infer_field_type(value) when is_boolean(value), do: "boolean"
+  defp infer_field_type(_), do: "text"
+
+  defp put_typed_value(attrs, %Date{} = value), do: Map.put(attrs, :date_value, value)
+  defp put_typed_value(attrs, value) when is_number(value), do: Map.put(attrs, :number_value, value)
+  defp put_typed_value(attrs, value) when is_boolean(value), do: Map.put(attrs, :boolean_value, value)
+  defp put_typed_value(attrs, value) when is_binary(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> Map.put(attrs, :date_value, date)
+      _ -> Map.put(attrs, :value, value)
+    end
+  end
+  defp put_typed_value(attrs, nil), do: attrs
+
+  @doc """
+  Get upcoming dates for entities (e.g., birthdays, anniversaries).
+  Returns custom fields with dates in the next X days.
+  """
+  def get_upcoming_dates(user_id, opts \\ []) do
+    days_ahead = Keyword.get(opts, :days_ahead, 30)
+    category = Keyword.get(opts, :category)
+
+    today = Date.utc_today()
+    end_date = Date.add(today, days_ahead)
+
+    # For recurring dates, we need to check the month/day regardless of year
+    query = from cf in CustomField,
+      join: e in Entity, on: cf.entity_id == e.id,
+      where: e.owner_id == ^user_id and cf.field_type == "date" and not is_nil(cf.date_value),
+      select: %{
+        custom_field: cf,
+        entity_id: e.id,
+        entity_name: e.name,
+        entity_avatar_url: e.avatar_url
+      },
+      order_by: [asc: fragment("EXTRACT(MONTH FROM ?), EXTRACT(DAY FROM ?)", cf.date_value, cf.date_value)]
+
+    query = if category, do: where(query, [cf], cf.category == ^category), else: query
+
+    results = Repo.all(query)
+
+    # Filter by upcoming dates (considering recurring dates)
+    Enum.filter(results, fn %{custom_field: cf} ->
+      if cf.is_recurring do
+        # For recurring dates, check if the month/day falls within the range
+        this_year_date = %{cf.date_value | year: today.year}
+        next_year_date = %{cf.date_value | year: today.year + 1}
+
+        (Date.compare(this_year_date, today) in [:gt, :eq] and Date.compare(this_year_date, end_date) in [:lt, :eq]) or
+        (Date.compare(next_year_date, today) in [:gt, :eq] and Date.compare(next_year_date, end_date) in [:lt, :eq])
+      else
+        Date.compare(cf.date_value, today) in [:gt, :eq] and Date.compare(cf.date_value, end_date) in [:lt, :eq]
+      end
+    end)
+  end
+
+  @doc """
+  Get all custom fields of a specific category for a user's entities.
+  """
+  def list_custom_fields_by_category(user_id, category) do
+    from(cf in CustomField,
+      join: e in Entity, on: cf.entity_id == e.id,
+      where: e.owner_id == ^user_id and cf.category == ^category,
+      preload: [entity: e],
+      order_by: [asc: cf.name]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get predefined field suggestions.
+  """
+  def predefined_custom_fields do
+    CustomField.predefined_fields()
   end
 
 end

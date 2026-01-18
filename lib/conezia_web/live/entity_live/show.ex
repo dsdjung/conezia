@@ -5,6 +5,7 @@ defmodule ConeziaWeb.EntityLive.Show do
   use ConeziaWeb, :live_view
 
   alias Conezia.Entities
+  alias Conezia.Entities.Relationship
   alias Conezia.Interactions
   alias Conezia.Reminders
 
@@ -20,12 +21,19 @@ defmodule ConeziaWeb.EntityLive.Show do
          |> push_navigate(to: ~p"/connections")}
 
       entity ->
+        relationship = Entities.get_relationship_for_entity(user.id, entity.id)
+        custom_fields = Entities.list_custom_fields(entity.id)
+
         socket =
           socket
           |> assign(:page_title, entity.name)
           |> assign(:entity, entity)
+          |> assign(:relationship, relationship)
+          |> assign(:custom_fields, custom_fields)
           |> assign(:interactions, list_interactions(entity.id, user.id))
           |> assign(:reminders, list_reminders(entity.id, user.id))
+          |> assign(:editing_custom_field, nil)
+          |> assign(:new_custom_field, nil)
 
         {:ok, socket}
     end
@@ -62,13 +70,100 @@ defmodule ConeziaWeb.EntityLive.Show do
     end
   end
 
+  def handle_event("add_custom_field", _params, socket) do
+    {:noreply, assign(socket, :new_custom_field, %{
+      field_type: "text",
+      category: "personal",
+      name: "",
+      value: ""
+    })}
+  end
+
+  def handle_event("cancel_add_custom_field", _params, socket) do
+    {:noreply, assign(socket, :new_custom_field, nil)}
+  end
+
+  def handle_event("save_custom_field", %{"custom_field" => params}, socket) do
+    entity = socket.assigns.entity
+    attrs = %{
+      entity_id: entity.id,
+      name: params["name"],
+      key: normalize_key(params["name"]),
+      field_type: params["field_type"],
+      category: params["category"],
+      is_recurring: params["is_recurring"] == "true"
+    }
+    |> put_field_value(params["field_type"], params["value"])
+
+    case Entities.create_custom_field(attrs) do
+      {:ok, _field} ->
+        custom_fields = Entities.list_custom_fields(entity.id)
+        {:noreply,
+         socket
+         |> assign(:custom_fields, custom_fields)
+         |> assign(:new_custom_field, nil)
+         |> put_flash(:info, "Custom field added")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to add custom field")}
+    end
+  end
+
+  def handle_event("delete_custom_field", %{"id" => id}, socket) do
+    entity = socket.assigns.entity
+
+    case Entities.get_custom_field(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Field not found")}
+
+      field ->
+        case Entities.delete_custom_field(field) do
+          {:ok, _} ->
+            custom_fields = Entities.list_custom_fields(entity.id)
+            {:noreply,
+             socket
+             |> assign(:custom_fields, custom_fields)
+             |> put_flash(:info, "Custom field deleted")}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to delete custom field")}
+        end
+    end
+  end
+
   @impl true
   def handle_info({ConeziaWeb.EntityLive.FormComponent, {:saved, entity}}, socket) do
+    user = socket.assigns.current_user
+    relationship = Entities.get_relationship_for_entity(user.id, entity.id)
+
     {:noreply,
      socket
      |> assign(:entity, entity)
+     |> assign(:relationship, relationship)
      |> assign(:page_title, entity.name)}
   end
+
+  defp normalize_key(name) when is_binary(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "_")
+    |> String.trim("_")
+  end
+
+  defp put_field_value(attrs, "date", value) when is_binary(value) and value != "" do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> Map.put(attrs, :date_value, date)
+      _ -> attrs
+    end
+  end
+  defp put_field_value(attrs, "number", value) when is_binary(value) and value != "" do
+    case Decimal.parse(value) do
+      {decimal, _} -> Map.put(attrs, :number_value, decimal)
+      _ -> attrs
+    end
+  end
+  defp put_field_value(attrs, "boolean", value), do: Map.put(attrs, :boolean_value, value == "true")
+  defp put_field_value(attrs, _type, value), do: Map.put(attrs, :value, value)
 
   @impl true
   def render(assigns) do
@@ -85,6 +180,9 @@ defmodule ConeziaWeb.EntityLive.Show do
             </h1>
             <div class="mt-1 flex items-center gap-2">
               <.badge color={entity_type_color(@entity.type)}>{@entity.type}</.badge>
+              <.badge :if={@relationship} color={relationship_type_color(@relationship.type)}>
+                {relationship_display_label(@relationship)}
+              </.badge>
               <.health_badge status={health_status(@entity)} />
             </div>
           </div>
@@ -116,11 +214,150 @@ defmodule ConeziaWeb.EntityLive.Show do
             <.list>
               <:item :if={@entity.description} title="Description">{@entity.description}</:item>
               <:item title="Type">{String.capitalize(@entity.type || "Unknown")}</:item>
+              <:item :if={@relationship} title="Relationship">
+                {relationship_display_label(@relationship)}
+              </:item>
               <:item :if={@entity.last_interaction_at} title="Last Interaction">
                 {format_datetime(@entity.last_interaction_at)}
               </:item>
               <:item title="Created">{format_datetime(@entity.inserted_at)}</:item>
             </.list>
+          </.card>
+
+          <!-- Custom Fields -->
+          <.card>
+            <:header>
+              <div class="flex items-center justify-between">
+                <span>Custom Information</span>
+                <button
+                  :if={is_nil(@new_custom_field)}
+                  phx-click="add_custom_field"
+                  class="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                >
+                  Add Field →
+                </button>
+              </div>
+            </:header>
+
+            <!-- Add new custom field form -->
+            <div :if={@new_custom_field} class="mb-4 p-4 bg-gray-50 rounded-lg">
+              <form phx-submit="save_custom_field" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">Field Name</label>
+                    <input
+                      type="text"
+                      name="custom_field[name]"
+                      placeholder="e.g., Birthday, Company"
+                      required
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">Type</label>
+                    <select
+                      name="custom_field[field_type]"
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="text">Text</option>
+                      <option value="date">Date</option>
+                      <option value="number">Number</option>
+                      <option value="boolean">Yes/No</option>
+                      <option value="url">URL</option>
+                      <option value="email">Email</option>
+                      <option value="phone">Phone</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">Category</label>
+                    <select
+                      name="custom_field[category]"
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="important_dates">Important Dates</option>
+                      <option value="preferences">Preferences</option>
+                      <option value="work">Work</option>
+                      <option value="personal">Personal</option>
+                      <option value="social">Social</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">Value</label>
+                    <input
+                      type="text"
+                      name="custom_field[value]"
+                      placeholder="Enter value"
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="custom_field[is_recurring]"
+                    value="true"
+                    id="is_recurring"
+                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label for="is_recurring" class="text-sm text-gray-600">
+                    Recurring (for dates like birthdays)
+                  </label>
+                </div>
+                <div class="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    phx-click="cancel_add_custom_field"
+                    class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                  >
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div :if={@custom_fields == []} class="py-8">
+              <.empty_state>
+                <:icon><span class="hero-document-text h-10 w-10" /></:icon>
+                <:title>No custom information</:title>
+                <:description>Add important dates, preferences, or other details about this connection.</:description>
+              </.empty_state>
+            </div>
+
+            <div :if={@custom_fields != []}>
+              <%= for {category, fields} <- group_custom_fields(@custom_fields) do %>
+                <div class="mb-4">
+                  <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    {humanize_type(category)}
+                  </h4>
+                  <dl class="divide-y divide-gray-200">
+                    <div :for={field <- fields} class="py-2 flex items-center justify-between">
+                      <dt class="text-sm font-medium text-gray-500">{field.name}</dt>
+                      <dd class="flex items-center gap-2">
+                        <span class="text-sm text-gray-900">{format_field_value(field)}</span>
+                        <span :if={field.is_recurring} class="text-xs text-gray-400">(recurring)</span>
+                        <button
+                          phx-click="delete_custom_field"
+                          phx-value-id={field.id}
+                          data-confirm="Delete this field?"
+                          class="text-gray-400 hover:text-red-500"
+                        >
+                          <span class="hero-x-mark h-4 w-4" />
+                        </button>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              <% end %>
+            </div>
           </.card>
 
           <!-- Recent interactions -->
@@ -199,6 +436,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           title="Edit Connection"
           action={@live_action}
           entity={@entity}
+          relationship={@relationship}
           current_user={@current_user}
           patch={~p"/connections/#{@entity.id}"}
         />
@@ -263,4 +501,41 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp format_datetime(datetime) do
     Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
   end
+
+  defp relationship_type_color("family"), do: :pink
+  defp relationship_type_color("friend"), do: :green
+  defp relationship_type_color("colleague"), do: :blue
+  defp relationship_type_color("professional"), do: :indigo
+  defp relationship_type_color("community"), do: :purple
+  defp relationship_type_color("service"), do: :yellow
+  defp relationship_type_color(_), do: :gray
+
+  defp relationship_display_label(nil), do: "Connection"
+  defp relationship_display_label(relationship) do
+    Relationship.display_label(relationship)
+  end
+
+  defp group_custom_fields(fields) do
+    fields
+    |> Enum.group_by(& &1.category)
+    |> Enum.sort_by(fn {category, _} -> category_sort_order(category) end)
+  end
+
+  defp category_sort_order("important_dates"), do: 0
+  defp category_sort_order("work"), do: 1
+  defp category_sort_order("personal"), do: 2
+  defp category_sort_order("preferences"), do: 3
+  defp category_sort_order("social"), do: 4
+  defp category_sort_order(_), do: 5
+
+  defp format_field_value(%{field_type: "date", date_value: date}) when not is_nil(date) do
+    Calendar.strftime(date, "%b %d, %Y")
+  end
+  defp format_field_value(%{field_type: "boolean", boolean_value: true}), do: "Yes"
+  defp format_field_value(%{field_type: "boolean", boolean_value: false}), do: "No"
+  defp format_field_value(%{field_type: "number", number_value: num}) when not is_nil(num) do
+    Decimal.to_string(num)
+  end
+  defp format_field_value(%{value: value}) when not is_nil(value), do: value
+  defp format_field_value(_), do: "-"
 end
