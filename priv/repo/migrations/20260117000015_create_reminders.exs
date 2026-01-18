@@ -5,7 +5,7 @@ defmodule Conezia.Repo.Migrations.CreateReminders do
     create table(:reminders, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :user_id, references(:users, type: :binary_id, on_delete: :delete_all), null: false
-      add :entity_id, references(:entities, type: :binary_id, on_delete: :set_null)
+      add :entity_id, references(:entities, type: :binary_id, on_delete: :nilify_all)
       add :type, :string, size: 32, null: false
       add :title, :string, size: 255, null: false
       add :description, :text
@@ -22,10 +22,12 @@ defmodule Conezia.Repo.Migrations.CreateReminders do
     create index(:reminders, [:user_id, :due_at])
     create index(:reminders, [:entity_id])
 
-    # Index for finding due reminders
+    # Index for finding pending reminders (completed_at is null)
+    # Note: We can't use now() in a partial index as it's not immutable.
+    # Instead, we index on due_at for uncompleted reminders.
     execute """
     CREATE INDEX reminders_due_pending_idx ON reminders (due_at)
-    WHERE completed_at IS NULL AND (snoozed_until IS NULL OR snoozed_until < now());
+    WHERE completed_at IS NULL;
     """, """
     DROP INDEX reminders_due_pending_idx;
     """

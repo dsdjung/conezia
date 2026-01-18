@@ -3,8 +3,9 @@ defmodule Conezia.Repo.Migrations.SetupFullTextSearch do
 
   def up do
     # Create custom text search configuration
+    execute "CREATE TEXT SEARCH CONFIGURATION conezia_search (COPY = simple);"
+
     execute """
-    CREATE TEXT SEARCH CONFIGURATION conezia_search (COPY = simple);
     ALTER TEXT SEARCH CONFIGURATION conezia_search
       ALTER MAPPING FOR hword, hword_part, word
       WITH unaccent, simple;

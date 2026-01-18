@@ -5,7 +5,7 @@ defmodule Conezia.Repo.Migrations.CreateExternalAccounts do
     create table(:external_accounts, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :user_id, references(:users, type: :binary_id, on_delete: :delete_all), null: false
-      add :entity_id, references(:entities, type: :binary_id, on_delete: :set_null)
+      add :entity_id, references(:entities, type: :binary_id, on_delete: :nilify_all)
       add :service_name, :string, size: 32, null: false
       add :account_identifier, :string, size: 255, null: false
       add :credentials, :binary  # Encrypted OAuth access token

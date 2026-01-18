@@ -5,9 +5,9 @@ defmodule Conezia.Repo.Migrations.CreateAttachments do
     create table(:attachments, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :user_id, references(:users, type: :binary_id, on_delete: :delete_all), null: false
-      add :entity_id, references(:entities, type: :binary_id, on_delete: :set_null)
-      add :interaction_id, references(:interactions, type: :binary_id, on_delete: :set_null)
-      add :communication_id, references(:communications, type: :binary_id, on_delete: :set_null)
+      add :entity_id, references(:entities, type: :binary_id, on_delete: :nilify_all)
+      add :interaction_id, references(:interactions, type: :binary_id, on_delete: :nilify_all)
+      add :communication_id, references(:communications, type: :binary_id, on_delete: :nilify_all)
       add :filename, :string, size: 255, null: false
       add :mime_type, :string, size: 128, null: false
       add :size_bytes, :bigint, null: false
