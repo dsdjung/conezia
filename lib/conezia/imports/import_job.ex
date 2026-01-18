@@ -8,7 +8,7 @@ defmodule Conezia.Imports.ImportJob do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @sources ~w(google csv vcard linkedin icloud outlook)
+  @sources ~w(google google_contacts csv vcard linkedin icloud outlook)
   @statuses ~w(pending processing completed failed cancelled)
 
   schema "import_jobs" do
