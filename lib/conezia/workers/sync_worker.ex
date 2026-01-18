@@ -17,6 +17,9 @@ defmodule Conezia.Workers.SyncWorker do
 
   require Logger
 
+  @pubsub Conezia.PubSub
+  @topic_prefix "sync:"
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"import_job_id" => import_job_id}}) do
     case Repo.get(ImportJob, import_job_id) |> Repo.preload(:external_account) do
@@ -39,6 +42,7 @@ defmodule Conezia.Workers.SyncWorker do
 
   defp process_sync(import_job) do
     {:ok, import_job} = Imports.start_import(import_job)
+    broadcast_status(import_job.user_id, :started, %{import_job_id: import_job.id})
 
     try do
       account = import_job.external_account
@@ -51,31 +55,64 @@ defmodule Conezia.Workers.SyncWorker do
         case result do
           {:ok, stats} ->
             ExternalAccounts.mark_synced(refreshed_account)
-            Imports.complete_import(import_job, stats)
+            {:ok, completed_job} = Imports.complete_import(import_job, stats)
+            broadcast_status(import_job.user_id, :completed, %{
+              import_job_id: import_job.id,
+              stats: stats,
+              account_id: refreshed_account.id
+            })
+            {:ok, completed_job}
             :ok
 
           {:error, errors} when is_list(errors) ->
             ExternalAccounts.mark_error(refreshed_account, "Sync failed")
             Imports.fail_import(import_job, errors)
+            broadcast_status(import_job.user_id, :failed, %{
+              import_job_id: import_job.id,
+              error: "Sync failed",
+              account_id: refreshed_account.id
+            })
             {:error, errors}
 
           {:error, error} ->
             ExternalAccounts.mark_error(refreshed_account, to_string(error))
             Imports.fail_import(import_job, [%{message: to_string(error)}])
+            broadcast_status(import_job.user_id, :failed, %{
+              import_job_id: import_job.id,
+              error: to_string(error),
+              account_id: account.id
+            })
             {:error, error}
         end
       else
         {:error, reason} ->
           Imports.fail_import(import_job, [%{message: to_string(reason)}])
+          broadcast_status(import_job.user_id, :failed, %{
+            import_job_id: import_job.id,
+            error: to_string(reason)
+          })
           {:error, reason}
       end
     rescue
       e ->
         Logger.error("Sync worker error: #{Exception.message(e)}")
         Imports.fail_import(import_job, [%{message: Exception.message(e)}])
+        broadcast_status(import_job.user_id, :failed, %{
+          import_job_id: import_job.id,
+          error: Exception.message(e)
+        })
         {:error, e}
     end
   end
+
+  defp broadcast_status(user_id, status, payload) do
+    Phoenix.PubSub.broadcast(@pubsub, "#{@topic_prefix}#{user_id}", {:sync_status, status, payload})
+  end
+
+  @doc """
+  Returns the PubSub topic for a user's sync updates.
+  """
+  def topic(user_id), do: "#{@topic_prefix}#{user_id}"
 
   defp fetch_and_import_contacts(import_job, provider, access_token) do
     fetch_all_contacts(provider, access_token, nil, [])

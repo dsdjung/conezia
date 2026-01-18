@@ -6,6 +6,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
 
   alias Conezia.Integrations
   alias Conezia.ExternalAccounts
+  alias Conezia.Workers.SyncWorker
 
   @tabs ~w(integrations account)
 
@@ -13,10 +14,16 @@ defmodule ConeziaWeb.SettingsLive.Index do
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
 
+    # Subscribe to sync updates for this user
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Conezia.PubSub, SyncWorker.topic(user.id))
+    end
+
     socket =
       socket
       |> assign(:page_title, "Settings")
       |> assign(:current_tab, "integrations")
+      |> assign(:syncing, false)
       |> assign_services(user)
       |> assign_import_jobs(user)
 
@@ -45,7 +52,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
           {:ok, _job} ->
             socket =
               socket
-              |> put_flash(:info, "Sync started! Check back for progress.")
+              |> assign(:syncing, true)
               |> assign_import_jobs(user)
 
             {:noreply, socket}
@@ -77,6 +84,40 @@ defmodule ConeziaWeb.SettingsLive.Index do
             {:noreply, put_flash(socket, :error, "Failed to disconnect: #{inspect(reason)}")}
         end
     end
+  end
+
+  # Handle PubSub messages for sync status updates
+  @impl true
+  def handle_info({:sync_status, :started, _payload}, socket) do
+    {:noreply, assign(socket, :syncing, true)}
+  end
+
+  def handle_info({:sync_status, :completed, payload}, socket) do
+    user = socket.assigns.current_user
+    stats = payload[:stats] || %{}
+
+    socket =
+      socket
+      |> assign(:syncing, false)
+      |> put_flash(:info, "Sync completed: #{stats[:created_records] || 0} created, #{stats[:merged_records] || 0} merged")
+      |> assign_services(user)
+      |> assign_import_jobs(user)
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:sync_status, :failed, payload}, socket) do
+    user = socket.assigns.current_user
+    error = payload[:error] || "Unknown error"
+
+    socket =
+      socket
+      |> assign(:syncing, false)
+      |> put_flash(:error, "Sync failed: #{error}")
+      |> assign_services(user)
+      |> assign_import_jobs(user)
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -118,7 +159,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
 
       <!-- Tab Content -->
       <div :if={@current_tab == "integrations"}>
-        <.integrations_content services={@services} import_jobs={@import_jobs} />
+        <.integrations_content services={@services} import_jobs={@import_jobs} syncing={@syncing} />
       </div>
 
       <div :if={@current_tab == "account"}>
@@ -131,6 +172,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
   # Integrations Tab Content
   attr :services, :list, required: true
   attr :import_jobs, :list, required: true
+  attr :syncing, :boolean, default: false
 
   defp integrations_content(assigns) do
     ~H"""
@@ -180,16 +222,29 @@ defmodule ConeziaWeb.SettingsLive.Index do
                   <button
                     phx-click="sync"
                     phx-value-id={service.account.id}
-                    class="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                    disabled={@syncing}
+                    class={[
+                      "inline-flex items-center rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset ring-gray-300",
+                      @syncing && "bg-gray-100 text-gray-400 cursor-not-allowed",
+                      !@syncing && "bg-white text-gray-900 hover:bg-gray-50"
+                    ]}
                   >
-                    <span class="hero-arrow-path -ml-0.5 mr-1.5 h-4 w-4" />
-                    Sync
+                    <span class={[
+                      "hero-arrow-path -ml-0.5 mr-1.5 h-4 w-4",
+                      @syncing && "animate-spin"
+                    ]} />
+                    <%= if @syncing, do: "Syncing...", else: "Sync" %>
                   </button>
                   <button
                     phx-click="disconnect"
                     phx-value-id={service.account.id}
+                    disabled={@syncing}
                     data-confirm="Are you sure you want to disconnect this service?"
-                    class="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                    class={[
+                      "inline-flex items-center rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset ring-gray-300",
+                      @syncing && "bg-gray-100 text-gray-400 cursor-not-allowed",
+                      !@syncing && "bg-white text-red-600 hover:bg-gray-50"
+                    ]}
                   >
                     Disconnect
                   </button>
