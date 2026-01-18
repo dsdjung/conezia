@@ -125,6 +125,17 @@ if config_env() == :prod do
     client_id: google_client_id,
     client_secret: google_client_secret
 
+  # LinkedIn OAuth configuration - OPTIONAL for LinkedIn integration
+  # If not configured, LinkedIn will show as "Coming Soon"
+  linkedin_client_id = System.get_env("LINKEDIN_CLIENT_ID")
+  linkedin_client_secret = System.get_env("LINKEDIN_CLIENT_SECRET")
+
+  if linkedin_client_id && linkedin_client_secret do
+    config :conezia, :linkedin_oauth,
+      client_id: linkedin_client_id,
+      client_secret: linkedin_client_secret
+  end
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

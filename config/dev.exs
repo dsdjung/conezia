@@ -77,3 +77,16 @@ config :phoenix, :stacktrace_depth, 20
 
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
+
+# Google OAuth configuration (from environment variables)
+config :conezia, :google_oauth,
+  client_id: System.get_env("GOOGLE_CLIENT_ID"),
+  client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
+
+# LinkedIn OAuth configuration (optional, from environment variables)
+# If not set, LinkedIn will show as "Coming Soon" in Settings
+if System.get_env("LINKEDIN_CLIENT_ID") do
+  config :conezia, :linkedin_oauth,
+    client_id: System.get_env("LINKEDIN_CLIENT_ID"),
+    client_secret: System.get_env("LINKEDIN_CLIENT_SECRET")
+end

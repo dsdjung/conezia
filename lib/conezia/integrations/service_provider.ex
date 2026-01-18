@@ -60,6 +60,7 @@ defmodule Conezia.Integrations.ServiceProvider do
   Returns the provider module for a given service name.
   """
   def get_provider("google_contacts"), do: {:ok, Conezia.Integrations.Providers.GoogleContacts}
+  def get_provider("linkedin"), do: {:ok, Conezia.Integrations.Providers.LinkedIn}
   def get_provider(service), do: {:error, "Unknown service: #{service}"}
 
   @doc """
@@ -76,10 +77,10 @@ defmodule Conezia.Integrations.ServiceProvider do
       },
       %{
         service: "linkedin",
-        module: nil,
+        module: Conezia.Integrations.Providers.LinkedIn,
         display_name: "LinkedIn",
         icon: "hero-briefcase",
-        status: :coming_soon
+        status: linkedin_status()
       },
       %{
         service: "icloud",
@@ -96,5 +97,15 @@ defmodule Conezia.Integrations.ServiceProvider do
         status: :coming_soon
       }
     ]
+  end
+
+  # LinkedIn is available if configured, otherwise coming_soon
+  defp linkedin_status do
+    config = Application.get_env(:conezia, :linkedin_oauth, [])
+    if config[:client_id] && config[:client_secret] do
+      :available
+    else
+      :coming_soon
+    end
   end
 end
