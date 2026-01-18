@@ -201,12 +201,14 @@ defmodule Conezia.Workers.SyncWorker do
   end
 
   defp create_entity(user_id, contact) do
+    # Entity schema uses 'description' field - we prioritize organization, fall back to notes
+    description = contact.organization || contact.notes
+
     attrs = %{
       "name" => contact.name,
       "type" => "person",
       "owner_id" => user_id,
-      "description" => contact.organization,
-      "notes" => contact.notes,
+      "description" => description,
       "metadata" => contact.metadata || %{}
     }
 
@@ -222,20 +224,16 @@ defmodule Conezia.Workers.SyncWorker do
 
   defp merge_entity(existing, contact) do
     # Update entity with new data if relevant
-    updates = %{}
-
+    # Entity schema uses 'description' field - prioritize organization, fall back to notes
     updates =
-      if contact.organization && is_nil(existing.description) do
-        Map.put(updates, "description", contact.organization)
+      if is_nil(existing.description) do
+        cond do
+          contact.organization -> %{"description" => contact.organization}
+          contact.notes -> %{"description" => contact.notes}
+          true -> %{}
+        end
       else
-        updates
-      end
-
-    updates =
-      if contact.notes && is_nil(existing.notes) do
-        Map.put(updates, "notes", contact.notes)
-      else
-        updates
+        %{}
       end
 
     if map_size(updates) > 0 do
