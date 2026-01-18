@@ -45,17 +45,26 @@ defmodule Conezia.Imports do
     |> Repo.update()
   end
 
+  # Alias for worker compatibility
+  def start_import(%ImportJob{} = import_job), do: start_import_job(import_job)
+
   def complete_import_job(%ImportJob{} = import_job, stats) do
     import_job
     |> ImportJob.complete_changeset(stats)
     |> Repo.update()
   end
 
+  # Alias for worker compatibility
+  def complete_import(%ImportJob{} = import_job, stats), do: complete_import_job(import_job, stats)
+
   def fail_import_job(%ImportJob{} = import_job, errors) do
     import_job
     |> ImportJob.fail_changeset(errors)
     |> Repo.update()
   end
+
+  # Alias for worker compatibility
+  def fail_import(%ImportJob{} = import_job, errors), do: fail_import_job(import_job, errors)
 
   def cancel_import_job(%ImportJob{status: "pending"} = import_job) do
     import_job

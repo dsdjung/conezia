@@ -5,6 +5,7 @@ defmodule Conezia.Attachments do
   import Ecto.Query
   alias Conezia.Repo
   alias Conezia.Attachments.Attachment
+  alias Conezia.Storage
 
   def get_attachment(id), do: Repo.get(Attachment, id)
 
@@ -37,12 +38,22 @@ defmodule Conezia.Attachments do
   end
 
   def soft_delete_attachment(%Attachment{} = attachment) do
+    # Also delete from storage
+    if attachment.storage_key do
+      Storage.delete(attachment.storage_key)
+    end
+
     attachment
     |> Ecto.Changeset.change(deleted_at: DateTime.utc_now())
     |> Repo.update()
   end
 
   def delete_attachment(%Attachment{} = attachment) do
+    # Delete from storage first
+    if attachment.storage_key do
+      Storage.delete(attachment.storage_key)
+    end
+
     Repo.delete(attachment)
   end
 
@@ -58,37 +69,61 @@ defmodule Conezia.Attachments do
     {attachments, %{has_more: false, next_cursor: nil}}
   end
 
+  @doc """
+  Create an attachment with file upload.
+  Uses the configured storage adapter (local or S3).
+  """
   def create_attachment(attrs, %Plug.Upload{} = upload) do
-    # Store the file (in production, this would upload to S3/GCS)
-    storage_key = store_file(upload)
+    metadata = %{user_id: attrs["user_id"] || attrs[:user_id]}
 
-    attrs = Map.put(attrs, :storage_key, storage_key)
+    case Storage.store(upload, metadata) do
+      {:ok, storage_key} ->
+        attrs = attrs
+        |> Map.put("storage_key", storage_key)
+        |> Map.put("filename", upload.filename)
+        |> Map.put("mime_type", upload.content_type)
+        |> Map.put("size_bytes", get_file_size(upload))
 
-    %Attachment{}
-    |> Attachment.changeset(attrs)
-    |> Repo.insert()
+        %Attachment{}
+        |> Attachment.changeset(attrs)
+        |> Repo.insert()
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
-  defp store_file(%Plug.Upload{path: path, filename: filename}) do
-    # In production, upload to cloud storage
-    # For now, copy to local storage
-    upload_dir = Path.join(["priv", "uploads"])
-    File.mkdir_p!(upload_dir)
-
-    storage_key = "#{UUID.uuid4()}_#{filename}"
-    dest_path = Path.join(upload_dir, storage_key)
-
-    File.cp!(path, dest_path)
-    storage_key
+  defp get_file_size(%Plug.Upload{path: path}) do
+    case File.stat(path) do
+      {:ok, %{size: size}} -> size
+      _ -> 0
+    end
   end
 
+  @doc """
+  Get a signed download URL for an attachment.
+  The URL expires after the specified number of seconds (default: 1 hour).
+  """
   def get_download_url(%Attachment{storage_key: nil}), do: {:error, :file_not_found}
-  def get_download_url(%Attachment{storage_key: key}) do
-    path = Path.join(["priv", "uploads", key])
-    if File.exists?(path) do
-      {:ok, "/api/v1/attachments/#{key}/download"}
+  def get_download_url(%Attachment{storage_key: key}, expires_in \\ 3600) do
+    if Storage.exists?(key) do
+      Storage.signed_url(key, expires_in)
     else
       {:error, :file_not_found}
     end
   end
+
+  @doc """
+  Get the raw file content for an attachment.
+  """
+  def get_file_content(%Attachment{storage_key: nil}), do: {:error, :file_not_found}
+  def get_file_content(%Attachment{storage_key: key}) do
+    Storage.get(key)
+  end
+
+  @doc """
+  Check if an attachment's file exists in storage.
+  """
+  def file_exists?(%Attachment{storage_key: nil}), do: false
+  def file_exists?(%Attachment{storage_key: key}), do: Storage.exists?(key)
 end

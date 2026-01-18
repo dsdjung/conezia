@@ -154,4 +154,41 @@ defmodule Conezia.Reminders do
 
     {reminders, %{has_more: false, next_cursor: nil}}
   end
+
+  def list_overdue_reminders(user_id) do
+    now = DateTime.utc_now()
+
+    Reminder
+    |> where([r], r.user_id == ^user_id)
+    |> where([r], is_nil(r.completed_at))
+    |> where([r], r.due_at < ^now)
+    |> where([r], is_nil(r.snoozed_until) or r.snoozed_until < ^now)
+    |> order_by([r], asc: r.due_at)
+    |> preload([:entity])
+    |> Repo.all()
+  end
+
+  @doc """
+  Process all due reminders and trigger notifications.
+  Returns the list of processed reminders.
+  """
+  def process_due_reminders do
+    reminders = list_due_reminders()
+
+    Enum.each(reminders, fn _reminder ->
+      # Here we would trigger notifications based on reminder.notification_channels
+      # For now, just log that we would process it
+      # In production, this would call Conezia.Notifications.send/2
+      :ok
+    end)
+
+    reminders
+  end
+
+  # Delegated health functions from Conezia.Health module
+
+  defdelegate calculate_health_score(entity, relationship \\ nil), to: Conezia.Health
+  defdelegate list_entities_needing_attention(user_id, opts \\ []), to: Conezia.Health
+  defdelegate generate_weekly_digest(user_id), to: Conezia.Health
+  defdelegate create_health_alert(user_id, entity_id), to: Conezia.Health
 end

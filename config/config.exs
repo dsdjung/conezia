@@ -24,6 +24,22 @@ config :conezia, Conezia.Guardian,
 # Configure Tzdata for timezone support
 config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase
 
+# Configure Oban for background jobs
+config :conezia, Oban,
+  repo: Conezia.Repo,
+  plugins: [Oban.Plugins.Pruner],
+  queues: [default: 10, reminders: 5, imports: 3, webhooks: 5, health: 2]
+
+# Configure field-level encryption vault
+# WARNING: Change this key in production and keep it secure!
+config :conezia, Conezia.Vault,
+  secret_key: "dev_vault_key_32_bytes_change_me!"
+
+# Configure storage adapter (local for development)
+config :conezia, Conezia.Storage,
+  adapter: Conezia.Storage.Local,
+  base_path: "priv/uploads"
+
 # Configure the endpoint
 config :conezia, ConeziaWeb.Endpoint,
   url: [host: "localhost"],

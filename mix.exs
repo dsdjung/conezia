@@ -64,6 +64,9 @@ defmodule Conezia.MixProject do
       # UUID generation
       {:elixir_uuid, "~> 1.2"},
 
+      # Background jobs
+      {:oban, "~> 2.17"},
+
       # Testing
       {:ex_machina, "~> 2.8", only: :test},
       {:mox, "~> 1.0", only: :test}

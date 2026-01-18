@@ -12,8 +12,8 @@ defmodule Conezia.Application do
       Conezia.Repo,
       {DNSCluster, query: Application.get_env(:conezia, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Conezia.PubSub},
-      # Start a worker by calling: Conezia.Worker.start_link(arg)
-      # {Conezia.Worker, arg},
+      # Oban for background job processing
+      {Oban, Application.fetch_env!(:conezia, Oban)},
       # Start to serve requests, typically the last entry
       ConeziaWeb.Endpoint
     ]
