@@ -71,10 +71,10 @@ defmodule ConeziaWeb.Router do
     live_session :require_authenticated_user,
       on_mount: [{ConeziaWeb.UserAuth, :ensure_authenticated}] do
       live "/", DashboardLive.Index, :index
-      live "/contacts", EntityLive.Index, :index
-      live "/contacts/new", EntityLive.Index, :new
-      live "/contacts/:id", EntityLive.Show, :show
-      live "/contacts/:id/edit", EntityLive.Show, :edit
+      live "/connections", EntityLive.Index, :index
+      live "/connections/new", EntityLive.Index, :new
+      live "/connections/:id", EntityLive.Show, :show
+      live "/connections/:id/edit", EntityLive.Show, :edit
       live "/reminders", ReminderLive.Index, :index
       live "/reminders/new", ReminderLive.Index, :new
       live "/reminders/:id/edit", ReminderLive.Index, :edit

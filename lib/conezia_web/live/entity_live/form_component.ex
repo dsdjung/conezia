@@ -1,6 +1,6 @@
 defmodule ConeziaWeb.EntityLive.FormComponent do
   @moduledoc """
-  LiveComponent for creating and editing entities/contacts.
+  LiveComponent for creating and editing entities/connections.
   """
   use ConeziaWeb, :live_component
 
@@ -13,7 +13,7 @@ defmodule ConeziaWeb.EntityLive.FormComponent do
       <.header>
         {@title}
         <:subtitle>
-          {if @action == :new, do: "Add a new contact to your network.", else: "Update contact information."}
+          {if @action == :new, do: "Add a new connection to your network.", else: "Update connection information."}
         </:subtitle>
       </.header>
 
@@ -35,7 +35,7 @@ defmodule ConeziaWeb.EntityLive.FormComponent do
         <.input field={@form[:description]} type="textarea" label="Description" />
 
         <:actions>
-          <.button phx-disable-with="Saving...">Save Contact</.button>
+          <.button phx-disable-with="Saving...">Save Connection</.button>
         </:actions>
       </.simple_form>
     </div>
@@ -73,7 +73,7 @@ defmodule ConeziaWeb.EntityLive.FormComponent do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Contact updated successfully")
+         |> put_flash(:info, "Connection updated successfully")
          |> push_patch(to: socket.assigns.patch)}
 
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -90,7 +90,7 @@ defmodule ConeziaWeb.EntityLive.FormComponent do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Contact created successfully")
+         |> put_flash(:info, "Connection created successfully")
          |> push_patch(to: socket.assigns.patch)}
 
       {:error, %Ecto.Changeset{} = changeset} ->

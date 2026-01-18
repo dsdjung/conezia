@@ -738,11 +738,11 @@ defmodule ConeziaWeb.CoreComponents do
   ## Examples
 
       <.empty_state>
-        <:icon><.icon name="hero-users" class="h-12 w-12" /></:icon>
-        <:title>No contacts yet</:title>
-        <:description>Get started by creating a new contact.</:description>
+        <:icon><.icon name="hero-link" class="h-12 w-12" /></:icon>
+        <:title>No connections yet</:title>
+        <:description>Get started by creating a new connection.</:description>
         <:action>
-          <.button>Add Contact</.button>
+          <.button>Add Connection</.button>
         </:action>
       </.empty_state>
   """

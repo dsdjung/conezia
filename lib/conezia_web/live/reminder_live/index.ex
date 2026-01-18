@@ -200,7 +200,7 @@ defmodule ConeziaWeb.ReminderLive.Index do
                   <div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
                     <span>Due: {format_datetime(reminder.due_at)}</span>
                     <span :if={reminder.entity}>
-                      • <.link navigate={~p"/contacts/#{reminder.entity.id}"} class="text-indigo-600 hover:text-indigo-500">
+                      • <.link navigate={~p"/connections/#{reminder.entity.id}"} class="text-indigo-600 hover:text-indigo-500">
                         {reminder.entity.name}
                       </.link>
                     </span>

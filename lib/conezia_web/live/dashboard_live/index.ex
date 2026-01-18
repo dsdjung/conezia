@@ -1,6 +1,6 @@
 defmodule ConeziaWeb.DashboardLive.Index do
   @moduledoc """
-  Dashboard LiveView showing overview of contacts and relationship health.
+  Dashboard LiveView showing overview of connections and relationship health.
   """
   use ConeziaWeb, :live_view
 
@@ -33,9 +33,9 @@ defmodule ConeziaWeb.DashboardLive.Index do
       <!-- Stats Cards -->
       <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <.stats_card
-          title="Total Contacts"
-          value={@stats.total_contacts}
-          icon="hero-users"
+          title="Total Connections"
+          value={@stats.total_connections}
+          icon="hero-link"
         />
         <.stats_card
           title="Healthy"
@@ -58,31 +58,31 @@ defmodule ConeziaWeb.DashboardLive.Index do
       </div>
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <!-- Recent Contacts -->
+        <!-- Recent Connections -->
         <.card>
           <:header>
             <div class="flex items-center justify-between">
-              <span>Recent Contacts</span>
-              <.link navigate={~p"/contacts"} class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+              <span>Recent Connections</span>
+              <.link navigate={~p"/connections"} class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
                 View all →
               </.link>
             </div>
           </:header>
           <div :if={@recent_entities == []} class="py-8">
             <.empty_state>
-              <:icon><span class="hero-users h-12 w-12" /></:icon>
-              <:title>No contacts yet</:title>
-              <:description>Get started by adding your first contact.</:description>
+              <:icon><span class="hero-link h-12 w-12" /></:icon>
+              <:title>No connections yet</:title>
+              <:description>Get started by adding your first connection.</:description>
               <:action>
-                <.link navigate={~p"/contacts/new"}>
-                  <.button>Add Contact</.button>
+                <.link navigate={~p"/connections/new"}>
+                  <.button>Add Connection</.button>
                 </.link>
               </:action>
             </.empty_state>
           </div>
           <ul :if={@recent_entities != []} role="list" class="divide-y divide-gray-200">
             <li :for={entity <- @recent_entities} class="py-4">
-              <.link navigate={~p"/contacts/#{entity.id}"} class="flex items-center space-x-4 hover:bg-gray-50 -mx-4 px-4 py-2 rounded-lg">
+              <.link navigate={~p"/connections/#{entity.id}"} class="flex items-center space-x-4 hover:bg-gray-50 -mx-4 px-4 py-2 rounded-lg">
                 <.avatar name={entity.name} size={:md} />
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-sm font-medium text-gray-900">{entity.name}</p>
@@ -183,7 +183,7 @@ defmodule ConeziaWeb.DashboardLive.Index do
     upcoming = Reminders.count_upcoming_reminders(user.id)
 
     stats = %{
-      total_contacts: total,
+      total_connections: total,
       healthy_count: healthy,
       attention_count: attention,
       upcoming_reminders: upcoming

@@ -1,6 +1,6 @@
 defmodule ConeziaWeb.EntityLive.Show do
   @moduledoc """
-  LiveView for viewing and editing a single contact/entity.
+  LiveView for viewing and editing a single connection/entity.
   """
   use ConeziaWeb, :live_view
 
@@ -16,8 +16,8 @@ defmodule ConeziaWeb.EntityLive.Show do
       nil ->
         {:ok,
          socket
-         |> put_flash(:error, "Contact not found")
-         |> push_navigate(to: ~p"/contacts")}
+         |> put_flash(:error, "Connection not found")
+         |> push_navigate(to: ~p"/connections")}
 
       entity ->
         socket =
@@ -54,11 +54,11 @@ defmodule ConeziaWeb.EntityLive.Show do
       {:ok, _} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Contact deleted successfully")
-         |> push_navigate(to: ~p"/contacts")}
+         |> put_flash(:info, "Connection deleted successfully")
+         |> push_navigate(to: ~p"/connections")}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to delete contact")}
+        {:noreply, put_flash(socket, :error, "Failed to delete connection")}
     end
   end
 
@@ -74,7 +74,7 @@ defmodule ConeziaWeb.EntityLive.Show do
   def render(assigns) do
     ~H"""
     <div class="space-y-6">
-      <.back navigate={~p"/contacts"}>Back to contacts</.back>
+      <.back navigate={~p"/connections"}>Back to connections</.back>
 
       <div class="md:flex md:items-center md:justify-between">
         <div class="min-w-0 flex-1 flex items-center gap-4">
@@ -90,7 +90,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           </div>
         </div>
         <div class="mt-4 flex items-center gap-2 md:mt-0">
-          <.link patch={~p"/contacts/#{@entity.id}/edit"}>
+          <.link patch={~p"/connections/#{@entity.id}/edit"}>
             <.button class="bg-white text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50">
               <span class="hero-pencil-square -ml-0.5 mr-1.5 h-5 w-5" />
               Edit
@@ -98,7 +98,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           </.link>
           <.button
             phx-click="delete"
-            data-confirm="Are you sure you want to delete this contact? This action cannot be undone."
+            data-confirm="Are you sure you want to delete this connection? This action cannot be undone."
             class="bg-red-600 hover:bg-red-700"
           >
             <span class="hero-trash -ml-0.5 mr-1.5 h-5 w-5" />
@@ -135,7 +135,7 @@ defmodule ConeziaWeb.EntityLive.Show do
               <.empty_state>
                 <:icon><span class="hero-chat-bubble-left-right h-10 w-10" /></:icon>
                 <:title>No interactions yet</:title>
-                <:description>Record your first interaction with this contact.</:description>
+                <:description>Record your first interaction with this connection.</:description>
               </.empty_state>
             </div>
             <ul :if={@interactions != []} role="list" class="divide-y divide-gray-200">
@@ -192,16 +192,16 @@ defmodule ConeziaWeb.EntityLive.Show do
         :if={@live_action == :edit}
         id="entity-modal"
         show
-        on_cancel={JS.patch(~p"/contacts/#{@entity.id}")}
+        on_cancel={JS.patch(~p"/connections/#{@entity.id}")}
       >
         <.live_component
           module={ConeziaWeb.EntityLive.FormComponent}
           id={@entity.id}
-          title="Edit Contact"
+          title="Edit Connection"
           action={@live_action}
           entity={@entity}
           current_user={@current_user}
-          patch={~p"/contacts/#{@entity.id}"}
+          patch={~p"/connections/#{@entity.id}"}
         />
       </.modal>
     </div>

@@ -1,6 +1,6 @@
 defmodule ConeziaWeb.EntityLive.Index do
   @moduledoc """
-  LiveView for listing and managing contacts/entities.
+  LiveView for listing and managing connections/entities.
   """
   use ConeziaWeb, :live_view
 
@@ -13,7 +13,7 @@ defmodule ConeziaWeb.EntityLive.Index do
 
     socket =
       socket
-      |> assign(:page_title, "Contacts")
+      |> assign(:page_title, "Connections")
       |> assign(:search, "")
       |> assign(:type_filter, nil)
       |> stream(:entities, Entities.list_entities(user.id))
@@ -28,13 +28,13 @@ defmodule ConeziaWeb.EntityLive.Index do
 
   defp apply_action(socket, :new, _params) do
     socket
-    |> assign(:page_title, "New Contact")
+    |> assign(:page_title, "New Connection")
     |> assign(:entity, %Entity{})
   end
 
   defp apply_action(socket, :index, _params) do
     socket
-    |> assign(:page_title, "Contacts")
+    |> assign(:page_title, "Connections")
     |> assign(:entity, nil)
   end
 
@@ -74,7 +74,7 @@ defmodule ConeziaWeb.EntityLive.Index do
 
     case entity do
       nil ->
-        {:noreply, put_flash(socket, :error, "Contact not found")}
+        {:noreply, put_flash(socket, :error, "Connection not found")}
 
       entity ->
         {:ok, _} = Entities.delete_entity(entity)
@@ -82,7 +82,7 @@ defmodule ConeziaWeb.EntityLive.Index do
         {:noreply,
          socket
          |> stream_delete(:entities, entity)
-         |> put_flash(:info, "Contact deleted successfully")}
+         |> put_flash(:info, "Connection deleted successfully")}
     end
   end
 
@@ -96,13 +96,13 @@ defmodule ConeziaWeb.EntityLive.Index do
     ~H"""
     <div class="space-y-6">
       <.header>
-        Contacts
-        <:subtitle>Manage your personal and professional relationships</:subtitle>
+        Connections
+        <:subtitle>Manage your relationships with people, organizations, and more</:subtitle>
         <:actions>
-          <.link patch={~p"/contacts/new"}>
+          <.link patch={~p"/connections/new"}>
             <.button>
               <span class="hero-plus -ml-0.5 mr-1.5 h-5 w-5" />
-              Add Contact
+              Add Connection
             </.button>
           </.link>
         </:actions>
@@ -117,7 +117,7 @@ defmodule ConeziaWeb.EntityLive.Index do
               type="text"
               name="search"
               value={@search}
-              placeholder="Search contacts..."
+              placeholder="Search connections..."
               phx-debounce="300"
               class="block w-full rounded-lg border-gray-300 pl-10 text-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
@@ -144,7 +144,7 @@ defmodule ConeziaWeb.EntityLive.Index do
             id={dom_id}
             class="hover:bg-gray-50"
           >
-            <.link navigate={~p"/contacts/#{entity.id}"} class="block">
+            <.link navigate={~p"/connections/#{entity.id}"} class="block">
               <div class="flex items-center px-4 py-4 sm:px-6">
                 <div class="flex min-w-0 flex-1 items-center">
                   <div class="flex-shrink-0">
@@ -163,7 +163,7 @@ defmodule ConeziaWeb.EntityLive.Index do
                 </div>
                 <div class="flex items-center gap-2">
                   <.link
-                    patch={~p"/contacts/#{entity.id}/edit"}
+                    patch={~p"/connections/#{entity.id}/edit"}
                     class="text-gray-400 hover:text-gray-500"
                   >
                     <span class="hero-pencil-square h-5 w-5" />
@@ -171,7 +171,7 @@ defmodule ConeziaWeb.EntityLive.Index do
                   <button
                     phx-click="delete"
                     phx-value-id={entity.id}
-                    data-confirm="Are you sure you want to delete this contact?"
+                    data-confirm="Are you sure you want to delete this connection?"
                     class="text-gray-400 hover:text-red-500"
                   >
                     <span class="hero-trash h-5 w-5" />
@@ -185,14 +185,14 @@ defmodule ConeziaWeb.EntityLive.Index do
 
         <div :if={@streams.entities.inserts == []} class="py-12">
           <.empty_state>
-            <:icon><span class="hero-users h-12 w-12" /></:icon>
-            <:title>No contacts found</:title>
+            <:icon><span class="hero-link h-12 w-12" /></:icon>
+            <:title>No connections found</:title>
             <:description>
-              {if @search != "" or @type_filter, do: "Try adjusting your search or filters.", else: "Get started by adding your first contact."}
+              {if @search != "" or @type_filter, do: "Try adjusting your search or filters.", else: "Get started by adding your first connection."}
             </:description>
             <:action :if={@search == "" and is_nil(@type_filter)}>
-              <.link patch={~p"/contacts/new"}>
-                <.button>Add Contact</.button>
+              <.link patch={~p"/connections/new"}>
+                <.button>Add Connection</.button>
               </.link>
             </:action>
           </.empty_state>
@@ -203,16 +203,16 @@ defmodule ConeziaWeb.EntityLive.Index do
         :if={@live_action == :new}
         id="entity-modal"
         show
-        on_cancel={JS.patch(~p"/contacts")}
+        on_cancel={JS.patch(~p"/connections")}
       >
         <.live_component
           module={ConeziaWeb.EntityLive.FormComponent}
           id={:new}
-          title="New Contact"
+          title="New Connection"
           action={@live_action}
           entity={@entity}
           current_user={@current_user}
-          patch={~p"/contacts"}
+          patch={~p"/connections"}
         />
       </.modal>
     </div>
