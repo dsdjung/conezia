@@ -550,6 +550,24 @@ defmodule Conezia.EntitiesTest do
       assert {"cannot be the same as source entity", _} = changeset.errors[:target_entity_id]
     end
 
+    test "create_entity_relationship/1 creates relationship without type or subtype" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      attrs = %{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id
+      }
+
+      assert {:ok, %EntityRelationship{} = rel} = Entities.create_entity_relationship(attrs)
+      assert rel.source_entity_id == entity1.id
+      assert rel.target_entity_id == entity2.id
+      assert is_nil(rel.type)
+      assert is_nil(rel.subtype)
+    end
+
     test "list_entity_relationships_for_entity/3 returns relationships for entity" do
       user = insert(:user)
       entity1 = insert(:entity, owner: user)

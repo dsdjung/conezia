@@ -79,8 +79,8 @@ defmodule Conezia.Entities.EntityRelationship do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_different_entities()
-    |> validate_inclusion(:type, Relationship.valid_types())
-    |> validate_inclusion(:inverse_type, Relationship.valid_types() ++ [nil])
+    |> validate_type_if_present()
+    |> validate_inverse_type_if_present()
     |> validate_length(:custom_label, max: 100)
     |> validate_length(:inverse_custom_label, max: 100)
     |> validate_length(:notes, max: 5000)
@@ -91,6 +91,20 @@ defmodule Conezia.Entities.EntityRelationship do
     |> unique_constraint([:user_id, :source_entity_id, :target_entity_id],
       name: "entity_relationships_user_id_source_entity_id_target_entity_id_"
     )
+  end
+
+  defp validate_type_if_present(changeset) do
+    case get_field(changeset, :type) do
+      nil -> changeset
+      _type -> validate_inclusion(changeset, :type, Relationship.valid_types())
+    end
+  end
+
+  defp validate_inverse_type_if_present(changeset) do
+    case get_field(changeset, :inverse_type) do
+      nil -> changeset
+      _type -> validate_inclusion(changeset, :inverse_type, Relationship.valid_types())
+    end
   end
 
   defp validate_different_entities(changeset) do
