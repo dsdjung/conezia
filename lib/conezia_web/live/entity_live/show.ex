@@ -164,14 +164,10 @@ defmodule ConeziaWeb.EntityLive.Show do
     attrs = %{
       user_id: user.id,
       source_entity_id: entity.id,
-      target_entity_id: params["target_entity_id"],
-      type: params["type"],
-      subtype: params["subtype"],
-      custom_label: params["custom_label"],
-      is_bidirectional: params["is_bidirectional"] == "true",
-      inverse_type: params["inverse_type"],
-      inverse_subtype: params["inverse_subtype"],
-      inverse_custom_label: params["inverse_custom_label"]
+      target_entity_id: blank_to_nil(params["target_entity_id"]),
+      type: blank_to_nil(params["type"]),
+      subtype: blank_to_nil(params["subtype"]),
+      custom_label: blank_to_nil(params["custom_label"])
     }
 
     case Entities.create_entity_relationship(attrs) do
@@ -184,8 +180,9 @@ defmodule ConeziaWeb.EntityLive.Show do
          |> assign(:available_entities, [])
          |> put_flash(:info, "Connection relationship added")}
 
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to add connection relationship")}
+      {:error, changeset} ->
+        error_msg = changeset_error_message(changeset)
+        {:noreply, put_flash(socket, :error, "Failed to add relationship: #{error_msg}")}
     end
   end
 
@@ -784,5 +781,18 @@ defmodule ConeziaWeb.EntityLive.Show do
     else
       source.name
     end
+  end
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
+  defp changeset_error_message(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+    |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
+    |> Enum.join("; ")
   end
 end
