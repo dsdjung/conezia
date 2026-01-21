@@ -177,11 +177,17 @@ defmodule Conezia.Entities.EntityRelationship do
 
   @doc """
   Returns the display label from the perspective of a given entity.
+
+  The subtype describes what the TARGET is to the SOURCE.
+  So when viewing from source's perspective, we show the subtype (what target is to me).
+  When viewing from target's perspective, we show the inverse (what source is to me).
   """
   def display_label_for(%__MODULE__{source_entity_id: source_id} = rel, entity_id) do
     if entity_id == source_id do
+      # I'm the source, show what the target is to me (subtype)
       display_label_for_source(rel)
     else
+      # I'm the target, show what the source is to me (inverse)
       display_label_for_target(rel)
     end
   end
