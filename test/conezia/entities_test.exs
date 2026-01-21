@@ -568,6 +568,23 @@ defmodule Conezia.EntitiesTest do
       assert is_nil(rel.subtype)
     end
 
+    test "create_entity_relationship/1 creates relationship with notes" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user)
+      entity2 = insert(:entity, owner: user)
+
+      attrs = %{
+        user_id: user.id,
+        source_entity_id: entity1.id,
+        target_entity_id: entity2.id,
+        type: "friend",
+        notes: "Met at a conference in 2020"
+      }
+
+      assert {:ok, %EntityRelationship{} = rel} = Entities.create_entity_relationship(attrs)
+      assert rel.notes == "Met at a conference in 2020"
+    end
+
     test "list_entity_relationships_for_entity/3 returns relationships for entity" do
       user = insert(:user)
       entity1 = insert(:entity, owner: user)

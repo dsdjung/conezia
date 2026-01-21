@@ -167,7 +167,8 @@ defmodule ConeziaWeb.EntityLive.Show do
       target_entity_id: blank_to_nil(params["target_entity_id"]),
       type: blank_to_nil(params["type"]),
       subtype: blank_to_nil(params["subtype"]),
-      custom_label: blank_to_nil(params["custom_label"])
+      custom_label: blank_to_nil(params["custom_label"]),
+      notes: blank_to_nil(params["notes"])
     }
 
     case Entities.create_entity_relationship(attrs) do
@@ -401,6 +402,15 @@ defmodule ConeziaWeb.EntityLive.Show do
                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                 </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">Notes (optional)</label>
+                  <textarea
+                    name="entity_relationship[notes]"
+                    rows="2"
+                    placeholder="Add any notes about this relationship..."
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  ></textarea>
+                </div>
                 <div class="flex gap-2 justify-end">
                   <button
                     type="button"
@@ -429,16 +439,19 @@ defmodule ConeziaWeb.EntityLive.Show do
 
             <ul :if={@entity_relationships != []} role="list" class="divide-y divide-gray-200">
               <li :for={rel <- @entity_relationships} class="py-3">
-                <div class="flex items-center justify-between">
+                <div class="flex items-start justify-between">
                   <.link
                     navigate={~p"/connections/#{other_entity_id(rel, @entity.id)}"}
-                    class="flex items-center gap-3 hover:bg-gray-50 -ml-2 pl-2 pr-3 py-1 rounded-md"
+                    class="flex items-start gap-3 hover:bg-gray-50 -ml-2 pl-2 pr-3 py-1 rounded-md flex-1"
                   >
                     <.avatar name={other_entity_name(rel, @entity.id)} size={:sm} />
-                    <div>
+                    <div class="min-w-0 flex-1">
                       <p class="text-sm font-medium text-gray-900">{other_entity_name(rel, @entity.id)}</p>
                       <p class="text-xs text-gray-500">
                         {EntityRelationship.display_label_for(rel, @entity.id)}
+                      </p>
+                      <p :if={rel.notes && rel.notes != ""} class="mt-1 text-xs text-gray-400 italic truncate">
+                        {rel.notes}
                       </p>
                     </div>
                   </.link>
@@ -446,7 +459,7 @@ defmodule ConeziaWeb.EntityLive.Show do
                     phx-click="delete_entity_relationship"
                     phx-value-id={rel.id}
                     data-confirm="Remove this relationship?"
-                    class="text-gray-400 hover:text-red-500"
+                    class="text-gray-400 hover:text-red-500 mt-1"
                   >
                     <.icon name="hero-x-mark" class="h-4 w-4" />
                   </button>
