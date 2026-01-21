@@ -336,7 +336,7 @@ defmodule ConeziaWeb.EntityLive.Show do
                 <div class="grid grid-cols-2 gap-3">
                   <div>
                     <label class="block text-sm font-medium text-gray-700">
-                      How is {@entity.name} related to them?
+                      {@entity.name} is their...
                     </label>
                     <select
                       name="entity_relationship[type]"
