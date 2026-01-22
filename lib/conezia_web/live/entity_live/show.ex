@@ -87,6 +87,11 @@ defmodule ConeziaWeb.EntityLive.Show do
     {:noreply, assign(socket, :new_custom_field, nil)}
   end
 
+  def handle_event("custom_field_type_changed", %{"custom_field" => %{"field_type" => field_type}}, socket) do
+    new_custom_field = Map.put(socket.assigns.new_custom_field, :field_type, field_type)
+    {:noreply, assign(socket, :new_custom_field, new_custom_field)}
+  end
+
   def handle_event("save_custom_field", %{"custom_field" => params}, socket) do
     entity = socket.assigns.entity
     attrs = %{
@@ -485,7 +490,7 @@ defmodule ConeziaWeb.EntityLive.Show do
 
             <!-- Add new custom field form -->
             <div :if={@new_custom_field} class="mb-4 p-4 bg-gray-50 rounded-lg">
-              <form phx-submit="save_custom_field" class="space-y-3">
+              <form phx-submit="save_custom_field" phx-change="custom_field_type_changed" class="space-y-3">
                 <div class="grid grid-cols-2 gap-3">
                   <div>
                     <label class="block text-sm font-medium text-gray-700">Field Name</label>
@@ -503,13 +508,13 @@ defmodule ConeziaWeb.EntityLive.Show do
                       name="custom_field[field_type]"
                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     >
-                      <option value="text">Text</option>
-                      <option value="date">Date</option>
-                      <option value="number">Number</option>
-                      <option value="boolean">Yes/No</option>
-                      <option value="url">URL</option>
-                      <option value="email">Email</option>
-                      <option value="phone">Phone</option>
+                      <option value="text" selected={@new_custom_field.field_type == "text"}>Text</option>
+                      <option value="date" selected={@new_custom_field.field_type == "date"}>Date</option>
+                      <option value="number" selected={@new_custom_field.field_type == "number"}>Number</option>
+                      <option value="boolean" selected={@new_custom_field.field_type == "boolean"}>Yes/No</option>
+                      <option value="url" selected={@new_custom_field.field_type == "url"}>URL</option>
+                      <option value="email" selected={@new_custom_field.field_type == "email"}>Email</option>
+                      <option value="phone" selected={@new_custom_field.field_type == "phone"}>Phone</option>
                     </select>
                   </div>
                 </div>
@@ -530,12 +535,59 @@ defmodule ConeziaWeb.EntityLive.Show do
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700">Value</label>
-                    <input
-                      type="text"
-                      name="custom_field[value]"
-                      placeholder="Enter value"
-                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    />
+                    <%= case @new_custom_field.field_type do %>
+                      <% "date" -> %>
+                        <input
+                          type="date"
+                          name="custom_field[value]"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      <% "number" -> %>
+                        <input
+                          type="number"
+                          name="custom_field[value]"
+                          step="any"
+                          placeholder="Enter number"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      <% "boolean" -> %>
+                        <select
+                          name="custom_field[value]"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        >
+                          <option value="">Select...</option>
+                          <option value="true">Yes</option>
+                          <option value="false">No</option>
+                        </select>
+                      <% "url" -> %>
+                        <input
+                          type="url"
+                          name="custom_field[value]"
+                          placeholder="https://example.com"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      <% "email" -> %>
+                        <input
+                          type="email"
+                          name="custom_field[value]"
+                          placeholder="email@example.com"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      <% "phone" -> %>
+                        <input
+                          type="tel"
+                          name="custom_field[value]"
+                          placeholder="+1 (555) 123-4567"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      <% _ -> %>
+                        <input
+                          type="text"
+                          name="custom_field[value]"
+                          placeholder="Enter value"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                    <% end %>
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
