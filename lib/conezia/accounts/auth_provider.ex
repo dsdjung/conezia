@@ -13,8 +13,8 @@ defmodule Conezia.Accounts.AuthProvider do
   schema "auth_providers" do
     field :provider, :string
     field :provider_uid, :string
-    field :provider_token, :binary
-    field :provider_refresh_token, :binary
+    field :provider_token, Conezia.Encrypted.Binary
+    field :provider_refresh_token, Conezia.Encrypted.Binary
     field :provider_meta, :map, default: %{}
 
     belongs_to :user, Conezia.Accounts.User

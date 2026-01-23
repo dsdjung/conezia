@@ -3,6 +3,15 @@ defmodule Conezia.VaultTest do
 
   alias Conezia.Vault
 
+  # Embedded schema for testing encrypt_field/2
+  defmodule TestSchema do
+    use Ecto.Schema
+
+    embedded_schema do
+      field :ssn, :string
+    end
+  end
+
   setup do
     # Ensure vault is configured for tests
     Application.put_env(:conezia, Conezia.Vault,
@@ -145,7 +154,7 @@ defmodule Conezia.VaultTest do
 
   describe "encrypt_field/2" do
     test "encrypts a changeset field" do
-      changeset = Ecto.Changeset.change(%{ssn: nil}, %{ssn: "123-45-6789"})
+      changeset = Ecto.Changeset.change(%TestSchema{ssn: nil}, %{ssn: "123-45-6789"})
       encrypted_changeset = Vault.encrypt_field(changeset, :ssn)
 
       encrypted_value = Ecto.Changeset.get_change(encrypted_changeset, :ssn)
@@ -154,7 +163,7 @@ defmodule Conezia.VaultTest do
     end
 
     test "does nothing if field is not changed" do
-      changeset = Ecto.Changeset.change(%{ssn: nil}, %{})
+      changeset = Ecto.Changeset.change(%TestSchema{ssn: nil}, %{})
       encrypted_changeset = Vault.encrypt_field(changeset, :ssn)
 
       assert Ecto.Changeset.get_change(encrypted_changeset, :ssn) == nil

@@ -16,7 +16,7 @@ defmodule Conezia.Platform.Webhook do
   schema "webhooks" do
     field :url, :string
     field :events, {:array, :string}, default: []
-    field :secret, :string
+    field :secret, Conezia.Encrypted.Binary
     field :status, :string, default: "active"
     field :last_triggered_at, :utc_datetime_usec
     field :failure_count, :integer, default: 0
