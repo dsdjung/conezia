@@ -15,15 +15,16 @@ test.describe('Connections', () => {
   test.describe('Connections List', () => {
     test('should display empty state when no connections exist', async ({ page }) => {
       await page.goto('/connections');
+      await waitForLiveView(page);
 
-      // Check page title
-      await expect(page.getByRole('heading', { name: /connections/i })).toBeVisible();
+      // Check page title (use level 1 heading specifically)
+      await expect(page.getByRole('heading', { name: 'Connections', level: 1 })).toBeVisible();
 
       // Check empty state
-      await expect(page.getByText(/no connections/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: /no connections/i })).toBeVisible();
 
       // Check Add Connection button
-      await expect(page.getByRole('link', { name: /add connection/i })).toBeVisible();
+      await expect(page.getByRole('link', { name: /add connection/i }).first()).toBeVisible();
     });
 
     test('should have search input', async ({ page }) => {

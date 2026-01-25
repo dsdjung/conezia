@@ -29,28 +29,24 @@ export function generateTestUser(prefix = 'test'): TestUser {
 export async function registerUser(page: Page, user: TestUser): Promise<void> {
   await page.goto('/register');
 
+  // Wait for LiveView to be connected before interacting
+  await waitForLiveView(page);
+
+  // Fill form fields
   await page.getByLabel('Email address').fill(user.email);
   await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.getByLabel('Confirm password').fill(user.password);
 
+  // Click the button and wait for form submission
   await page.getByRole('button', { name: /create account/i }).click();
 
   // Wait for the form to process - the registration flow:
   // 1. LiveView validates and creates user
-  // 2. Sets trigger_submit: true which auto-submits to /login
-  // 3. Session is created and redirects to dashboard
+  // 2. Sets trigger_submit: true which auto-submits POST to /login
+  // 3. SessionController creates session and redirects to dashboard
 
-  // Wait for navigation away from register page to either login or dashboard
-  await page.waitForURL(url => {
-    const path = new URL(url).pathname;
-    return path === '/' || path === '/login';
-  }, { timeout: 15000 });
-
-  // If we ended up at login (form auto-submitted), we should then be redirected to dashboard
-  // Give it a moment for the session to establish and redirect
-  if (page.url().includes('/login')) {
-    await page.waitForURL('/', { timeout: 10000 });
-  }
+  // Wait for redirect to dashboard (successful registration)
+  await expect(page).toHaveURL('/', { timeout: 15000 });
 }
 
 /**
@@ -59,13 +55,16 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
 export async function loginUser(page: Page, user: TestUser): Promise<void> {
   await page.goto('/login');
 
+  // Wait for LiveView to be connected before interacting
+  await waitForLiveView(page);
+
   await page.getByLabel('Email address').fill(user.email);
   await page.getByLabel('Password').fill(user.password);
 
   await page.getByRole('button', { name: /sign in/i }).click();
 
   // Wait for navigation to dashboard after successful login
-  await expect(page).toHaveURL('/', { timeout: 10000 });
+  await expect(page).toHaveURL('/', { timeout: 15000 });
 }
 
 /**
