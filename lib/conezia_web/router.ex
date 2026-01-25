@@ -25,7 +25,8 @@ defmodule ConeziaWeb.Router do
       error_handler: ConeziaWeb.AuthErrorHandler
 
     plug Guardian.Plug.VerifyHeader, scheme: "Bearer"
-    plug Guardian.Plug.LoadResource, allow_blank: true
+    plug Guardian.Plug.EnsureAuthenticated
+    plug Guardian.Plug.LoadResource
   end
 
   pipeline :rate_limited do
@@ -198,6 +199,9 @@ defmodule ConeziaWeb.Router do
     delete "/:id/tags/:tag_id", EntityController, :remove_tag
 
     put "/:id/health-threshold", EntityController, :set_health_threshold
+
+    post "/:id/archive", EntityController, :archive
+    post "/:id/unarchive", EntityController, :unarchive
   end
 
   # Relationship endpoints
@@ -318,7 +322,14 @@ defmodule ConeziaWeb.Router do
     get "/search", SearchController, :search
   end
 
-  # Health endpoints
+  # Public health check endpoint (no auth required)
+  scope "/api/v1", ConeziaWeb do
+    pipe_through [:api]
+
+    get "/health", HealthController, :index
+  end
+
+  # Authenticated health endpoints (relationship health)
   scope "/api/v1/health", ConeziaWeb do
     pipe_through [:api, :authenticated, :rate_limited]
 

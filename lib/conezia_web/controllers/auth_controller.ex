@@ -271,7 +271,7 @@ defmodule ConeziaWeb.AuthController do
       name: user.name,
       avatar_url: user.avatar_url,
       timezone: user.timezone,
-      email_verified: user.email_verified_at != nil,
+      email_verified: user.confirmed_at != nil,
       inserted_at: user.inserted_at,
       updated_at: user.updated_at
     }
@@ -293,7 +293,7 @@ defmodule ConeziaWeb.AuthController do
     case {code, redirect_uri} do
       # Placeholder for future implementation
       {"test_success_code", _uri} ->
-        test_user = %{id: "test", email: "test@example.com", name: "Test", avatar_url: nil, timezone: "UTC", email_verified_at: nil, inserted_at: DateTime.utc_now(), updated_at: DateTime.utc_now()}
+        test_user = %{id: "test", email: "test@example.com", name: "Test", avatar_url: nil, timezone: "UTC", confirmed_at: nil, inserted_at: DateTime.utc_now(), updated_at: DateTime.utc_now()}
         {:ok, test_user, true}
 
       _ ->

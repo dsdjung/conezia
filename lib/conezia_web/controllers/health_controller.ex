@@ -1,6 +1,6 @@
 defmodule ConeziaWeb.HealthController do
   @moduledoc """
-  Controller for relationship health endpoints.
+  Controller for health check and relationship health endpoints.
   """
   use ConeziaWeb, :controller
 
@@ -8,6 +8,20 @@ defmodule ConeziaWeb.HealthController do
   alias Conezia.Guardian
 
   # Auth is handled in router pipeline
+
+  @doc """
+  GET /api/v1/health
+  System health check endpoint (public, no auth required).
+  """
+  def index(conn, _params) do
+    conn
+    |> put_status(:ok)
+    |> json(%{
+      status: "healthy",
+      version: Application.spec(:conezia, :vsn) |> to_string(),
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
+    })
+  end
 
   @doc """
   GET /api/v1/health/summary

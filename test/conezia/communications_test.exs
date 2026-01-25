@@ -96,7 +96,8 @@ defmodule Conezia.CommunicationsTest do
         content: "Message content",
         sent_at: DateTime.utc_now(),
         entity_id: entity.id,
-        conversation_id: conversation.id
+        conversation_id: conversation.id,
+        user_id: user.id
       }
 
       assert {:ok, %Communication{}} = Communications.create_communication(attrs)

@@ -81,9 +81,13 @@ defmodule Conezia.Factory do
   end
 
   def identifier_factory do
+    value = sequence(:identifier_value, &"contact#{&1}@example.com")
+    type = "email"
+
     %Identifier{
-      type: "email",
-      value: sequence(:identifier_value, &"contact#{&1}@example.com"),
+      type: type,
+      value: value,
+      value_hash: Conezia.Vault.blind_index(value, "identifier_#{type}"),
       is_primary: true,
       entity: build(:entity)
     }

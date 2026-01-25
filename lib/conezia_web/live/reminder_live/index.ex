@@ -326,8 +326,8 @@ defmodule ConeziaWeb.ReminderLive.Index do
   end
 
   defp list_entities_for_select(user_id) do
-    Entities.list_entities(user_id, limit: 100)
-    |> Enum.map(&{&1.name, &1.id})
+    {entities, _meta} = Entities.list_entities(user_id, limit: 100)
+    Enum.map(entities, &{&1.name, &1.id})
   end
 
   defp reminder_status_color(reminder) do

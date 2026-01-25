@@ -316,7 +316,7 @@ defmodule ConeziaWeb.UserController do
       name: user.name,
       avatar_url: user.avatar_url,
       timezone: user.timezone,
-      email_verified: user.email_verified_at != nil,
+      email_verified: user.confirmed_at != nil,
       settings: user.settings || %{},
       inserted_at: user.inserted_at,
       updated_at: user.updated_at

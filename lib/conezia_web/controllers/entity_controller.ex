@@ -67,7 +67,7 @@ defmodule ConeziaWeb.EntityController do
   def create(conn, params) do
     user = Guardian.Plug.current_resource(conn)
 
-    attrs = Map.put(params, "user_id", user.id)
+    attrs = Map.put(params, "owner_id", user.id)
 
     case Entities.create_entity_with_associations(attrs) do
       {:ok, entity, potential_duplicates} ->
@@ -146,6 +146,62 @@ defmodule ConeziaWeb.EntityController do
             conn
             |> put_status(:ok)
             |> json(%{meta: %{message: if(permanent, do: "Entity deleted", else: "Entity archived")}})
+
+          {:error, _} ->
+            conn
+            |> put_status(:internal_server_error)
+            |> json(ErrorHelpers.internal_error(conn.request_path))
+        end
+    end
+  end
+
+  @doc """
+  POST /api/v1/entities/:id/archive
+  Archive an entity.
+  """
+  def archive(conn, %{"id" => id}) do
+    user = Guardian.Plug.current_resource(conn)
+
+    case Entities.get_entity_for_user(id, user.id) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(ErrorHelpers.not_found("entity", id, conn.request_path))
+
+      entity ->
+        case Entities.archive_entity(entity) do
+          {:ok, archived_entity} ->
+            conn
+            |> put_status(:ok)
+            |> json(%{data: entity_detail_json(archived_entity, [])})
+
+          {:error, _} ->
+            conn
+            |> put_status(:internal_server_error)
+            |> json(ErrorHelpers.internal_error(conn.request_path))
+        end
+    end
+  end
+
+  @doc """
+  POST /api/v1/entities/:id/unarchive
+  Unarchive an entity.
+  """
+  def unarchive(conn, %{"id" => id}) do
+    user = Guardian.Plug.current_resource(conn)
+
+    case Entities.get_entity_for_user(id, user.id) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(ErrorHelpers.not_found("entity", id, conn.request_path))
+
+      entity ->
+        case Entities.unarchive_entity(entity) do
+          {:ok, unarchived_entity} ->
+            conn
+            |> put_status(:ok)
+            |> json(%{data: entity_detail_json(unarchived_entity, [])})
 
           {:error, _} ->
             conn
@@ -595,6 +651,9 @@ defmodule ConeziaWeb.EntityController do
   end
 
   defp entity_list_json(entity) do
+    # Get relationship from the user's relationship to this entity, if loaded
+    relationship = get_entity_relationship(entity)
+
     %{
       id: entity.id,
       type: entity.type,
@@ -602,15 +661,33 @@ defmodule ConeziaWeb.EntityController do
       description: entity.description,
       avatar_url: entity.avatar_url,
       last_interaction_at: entity.last_interaction_at,
-      relationship: relationship_summary_json(entity.relationship),
-      tags: Enum.map(entity.tags || [], &tag_json/1),
-      primary_identifiers: primary_identifiers(entity.identifiers || []),
+      relationship: relationship_summary_json(relationship),
+      tags: Enum.map(get_loaded_or_empty(entity, :tags), &tag_json/1),
+      primary_identifiers: primary_identifiers(get_loaded_or_empty(entity, :identifiers)),
       inserted_at: entity.inserted_at,
       updated_at: entity.updated_at
     }
   end
 
+  defp get_entity_relationship(entity) do
+    case Map.get(entity, :relationship) do
+      %Ecto.Association.NotLoaded{} -> nil
+      nil -> nil
+      relationship -> relationship
+    end
+  end
+
+  defp get_loaded_or_empty(entity, field) do
+    case Map.get(entity, field) do
+      %Ecto.Association.NotLoaded{} -> []
+      nil -> []
+      value -> value
+    end
+  end
+
   defp entity_detail_json(entity, includes) do
+    relationship = get_entity_relationship(entity)
+
     base = %{
       id: entity.id,
       type: entity.type,
@@ -620,25 +697,28 @@ defmodule ConeziaWeb.EntityController do
       metadata: entity.metadata,
       last_interaction_at: entity.last_interaction_at,
       archived_at: entity.archived_at,
-      relationship: relationship_json(entity.relationship),
+      relationship: relationship_json(relationship),
       inserted_at: entity.inserted_at,
       updated_at: entity.updated_at
     }
 
-    base = if :identifiers in includes or entity.identifiers do
-      Map.put(base, :identifiers, Enum.map(entity.identifiers || [], &identifier_json/1))
+    identifiers = get_loaded_or_empty(entity, :identifiers)
+    base = if :identifiers in includes or identifiers != [] do
+      Map.put(base, :identifiers, Enum.map(identifiers, &identifier_json/1))
     else
       base
     end
 
-    base = if :tags in includes or entity.tags do
-      Map.put(base, :tags, Enum.map(entity.tags || [], &tag_json/1))
+    tags = get_loaded_or_empty(entity, :tags)
+    base = if :tags in includes or tags != [] do
+      Map.put(base, :tags, Enum.map(tags, &tag_json/1))
     else
       base
     end
 
-    base = if :groups in includes and entity.groups do
-      Map.put(base, :groups, Enum.map(entity.groups, &group_summary_json/1))
+    groups = get_loaded_or_empty(entity, :groups)
+    base = if :groups in includes and groups != [] do
+      Map.put(base, :groups, Enum.map(groups, &group_summary_json/1))
     else
       base
     end

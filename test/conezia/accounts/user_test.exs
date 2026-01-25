@@ -67,7 +67,8 @@ defmodule Conezia.Accounts.UserTest do
         password: "short"
       })
       refute changeset.valid?
-      assert %{password: ["should be at least 8 character(s)"]} = errors_on(changeset)
+      errors = errors_on(changeset)
+      assert "should be at least 8 character(s)" in errors[:password]
     end
 
     test "validates password has lowercase" do

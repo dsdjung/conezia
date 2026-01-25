@@ -226,7 +226,7 @@ defmodule Conezia.Accounts do
     case verify_email_token(token, "confirm") do
       {:ok, user} ->
         user
-        |> Ecto.Changeset.change(email_verified_at: DateTime.utc_now())
+        |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now())
         |> Repo.update()
         |> case do
           {:ok, user} ->

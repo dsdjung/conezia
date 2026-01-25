@@ -55,7 +55,7 @@ defmodule ConeziaWeb.Plugs.Auth do
   """
   def require_verified_email(conn, _opts) do
     case conn.assigns[:current_user] do
-      %{email_verified_at: nil} ->
+      %{confirmed_at: nil} ->
         conn
         |> put_status(:forbidden)
         |> json(%{

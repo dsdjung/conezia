@@ -156,7 +156,7 @@ defmodule Conezia.AccountsTest do
       token = Accounts.generate_user_email_token(user, "confirm")
 
       assert {:ok, verified_user} = Accounts.verify_email_with_token(token)
-      assert verified_user.email_verified_at
+      assert verified_user.confirmed_at
     end
 
     test "verify_email_with_token/1 fails with invalid token" do

@@ -2,10 +2,11 @@ defmodule Conezia.Validators.PlatformValidatorTest do
   use ExUnit.Case, async: true
 
   alias Conezia.Validators.PlatformValidator
+  alias Conezia.Platform.Webhook
 
   describe "SSRF protection in validate_webhook_url/1" do
     defp build_changeset(url) do
-      %{}
+      %Webhook{}
       |> Ecto.Changeset.cast(%{url: url, events: ["entity.created"]}, [:url, :events])
       |> PlatformValidator.validate_webhook_url()
     end
@@ -73,7 +74,7 @@ defmodule Conezia.Validators.PlatformValidatorTest do
 
   describe "validate_webhook_events/1" do
     defp build_events_changeset(events) do
-      %{}
+      %Webhook{}
       |> Ecto.Changeset.cast(%{url: "https://example.com", events: events}, [:url, :events])
       |> PlatformValidator.validate_webhook_events()
     end
@@ -84,7 +85,10 @@ defmodule Conezia.Validators.PlatformValidatorTest do
     end
 
     test "rejects empty events list" do
-      changeset = build_events_changeset([])
+      # When setting events to empty from a non-empty value, validation triggers
+      changeset = %Webhook{events: ["entity.created"]}
+        |> Ecto.Changeset.cast(%{url: "https://example.com", events: []}, [:url, :events])
+        |> PlatformValidator.validate_webhook_events()
       assert {"must have at least one event", _} = changeset.errors[:events]
     end
 

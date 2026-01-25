@@ -106,7 +106,7 @@ defmodule ConeziaWeb.EntityControllerTest do
       entity = insert(:entity, owner: user)
 
       conn = delete(conn, "/api/v1/entities/#{entity.id}")
-      assert response(conn, 204)
+      assert %{"meta" => %{"message" => _}} = json_response(conn, 200)
     end
 
     test "returns 404 for non-existent entity", %{conn: conn} do

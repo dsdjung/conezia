@@ -33,7 +33,7 @@ defmodule Conezia.EntitiesTest do
       other_user = insert(:user)
       insert(:entity, owner: other_user)
 
-      entities = Entities.list_entities(user.id)
+      {entities, _meta} = Entities.list_entities(user.id)
       assert length(entities) == 2
     end
 
@@ -42,7 +42,7 @@ defmodule Conezia.EntitiesTest do
       insert(:entity, owner: user, type: "person")
       insert(:entity, owner: user, type: "organization")
 
-      entities = Entities.list_entities(user.id, type: "person")
+      {entities, _meta} = Entities.list_entities(user.id, type: "person")
       assert length(entities) == 1
       assert hd(entities).type == "person"
     end
@@ -230,7 +230,13 @@ defmodule Conezia.EntitiesTest do
     test "check_identifier_duplicates/2 finds duplicates" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
-      insert(:identifier, entity: entity, type: "email", value: "test@example.com")
+
+      # Use create_identifier which goes through changeset and generates value_hash
+      {:ok, _identifier} = Entities.create_identifier(%{
+        entity_id: entity.id,
+        type: "email",
+        value: "test@example.com"
+      })
 
       duplicates = Entities.check_identifier_duplicates("email", "test@example.com")
       assert length(duplicates) == 1

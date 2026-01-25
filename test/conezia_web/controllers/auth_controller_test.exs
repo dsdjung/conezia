@@ -74,22 +74,19 @@ defmodule ConeziaWeb.AuthControllerTest do
       user = insert(:user)
       {:ok, token, _claims} = Conezia.Guardian.encode_and_sign(user)
 
-      conn =
-        conn
-        |> put_req_header("authorization", "Bearer #{token}")
-        |> post("/api/v1/auth/refresh")
+      conn = post(conn, "/api/v1/auth/refresh", %{refresh_token: token})
 
       assert %{"data" => %{"token" => new_token}} = json_response(conn, 200)
       assert new_token["access_token"]
     end
 
-    test "returns unauthorized without token", %{conn: conn} do
+    test "returns bad request without token", %{conn: conn} do
       conn = post(conn, "/api/v1/auth/refresh")
-      assert %{"error" => _} = json_response(conn, 401)
+      assert %{"error" => _} = json_response(conn, 400)
     end
   end
 
-  describe "GET /api/v1/auth/me" do
+  describe "GET /api/v1/users/me" do
     test "returns current user with valid token", %{conn: conn} do
       user = insert(:user)
       {:ok, token, _claims} = Conezia.Guardian.encode_and_sign(user)
@@ -97,7 +94,7 @@ defmodule ConeziaWeb.AuthControllerTest do
       conn =
         conn
         |> put_req_header("authorization", "Bearer #{token}")
-        |> get("/api/v1/auth/me")
+        |> get("/api/v1/users/me")
 
       assert %{"data" => user_data} = json_response(conn, 200)
       assert user_data["id"] == user.id
@@ -105,7 +102,7 @@ defmodule ConeziaWeb.AuthControllerTest do
     end
 
     test "returns unauthorized without token", %{conn: conn} do
-      conn = get(conn, "/api/v1/auth/me")
+      conn = get(conn, "/api/v1/users/me")
       assert %{"error" => _} = json_response(conn, 401)
     end
   end

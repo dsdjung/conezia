@@ -146,8 +146,8 @@ defmodule ConeziaWeb.EntityLive.Show do
     entity = socket.assigns.entity
 
     # Get other entities to choose from (exclude current entity)
-    available_entities = Entities.list_entities(user.id)
-    |> Enum.reject(fn e -> e.id == entity.id end)
+    {all_entities, _meta} = Entities.list_entities(user.id)
+    available_entities = Enum.reject(all_entities, fn e -> e.id == entity.id end)
 
     {:noreply,
      socket

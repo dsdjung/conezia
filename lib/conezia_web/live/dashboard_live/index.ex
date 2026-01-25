@@ -193,7 +193,7 @@ defmodule ConeziaWeb.DashboardLive.Index do
   end
 
   defp get_health_counts(user_id) do
-    entities = Entities.list_entities(user_id, limit: 1000)
+    {entities, _meta} = Entities.list_entities(user_id, limit: 1000)
 
     Enum.reduce(entities, {0, 0}, fn entity, {healthy, attention} ->
       case health_status(entity) do
@@ -206,7 +206,7 @@ defmodule ConeziaWeb.DashboardLive.Index do
   end
 
   defp assign_recent_entities(socket, user) do
-    entities = Entities.list_entities(user.id, limit: 5)
+    {entities, _meta} = Entities.list_entities(user.id, limit: 5)
     assign(socket, :recent_entities, entities)
   end
 

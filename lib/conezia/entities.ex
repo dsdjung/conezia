@@ -27,15 +27,26 @@ defmodule Conezia.Entities do
 
     query = from e in Entity,
       where: e.owner_id == ^user_id,
-      limit: ^limit,
+      limit: ^(limit + 1),
       offset: ^offset,
       order_by: [desc: e.last_interaction_at, desc: e.inserted_at]
 
-    query
+    entities = query
     |> filter_by_type(type)
     |> filter_by_status(status)
     |> filter_by_search(search)
     |> Repo.all()
+
+    # Check if there are more results
+    has_more = length(entities) > limit
+    entities = Enum.take(entities, limit)
+
+    meta = %{
+      has_more: has_more,
+      next_cursor: if(has_more, do: offset + limit, else: nil)
+    }
+
+    {entities, meta}
   end
 
   defp filter_by_type(query, nil), do: query
@@ -160,9 +171,12 @@ defmodule Conezia.Entities do
 
     new_tag_ids = source_tag_ids -- existing_tag_ids
 
+    # Convert string UUIDs to binary for raw table insert
+    target_id_binary = Ecto.UUID.dump!(target.id)
+
     Enum.each(new_tag_ids, fn tag_id ->
       Repo.insert_all("entity_tags", [
-        %{entity_id: target.id, tag_id: tag_id, inserted_at: DateTime.utc_now()}
+        %{entity_id: target_id_binary, tag_id: tag_id, inserted_at: DateTime.utc_now()}
       ])
     end)
 
@@ -268,7 +282,8 @@ defmodule Conezia.Entities do
   end
 
   def check_identifier_duplicates(type, value) do
-    hash = :crypto.hash(:sha256, String.downcase(value)) |> Base.encode16(case: :lower)
+    # Use the same blind index as the Identifier changeset for consistency
+    hash = Conezia.Vault.blind_index(value, "identifier_#{type}")
 
     Identifier
     |> where([i], i.type == ^type and i.value_hash == ^hash)
@@ -318,8 +333,11 @@ defmodule Conezia.Entities do
   def add_tags_to_entity(%Entity{} = entity, tag_ids) when is_list(tag_ids) do
     now = DateTime.utc_now()
 
+    # Convert string UUIDs to binary for raw table insert
+    entity_id_binary = Ecto.UUID.dump!(entity.id)
+
     entries = Enum.map(tag_ids, fn tag_id ->
-      %{entity_id: entity.id, tag_id: tag_id, inserted_at: now}
+      %{entity_id: entity_id_binary, tag_id: Ecto.UUID.dump!(tag_id), inserted_at: now}
     end)
 
     Repo.insert_all("entity_tags", entries, on_conflict: :nothing)
@@ -331,9 +349,13 @@ defmodule Conezia.Entities do
   end
 
   def remove_tag_from_entity(%Entity{} = entity, tag_id) do
+    # Convert string UUIDs to binary for raw table query
+    entity_id_binary = Ecto.UUID.dump!(entity.id)
+    tag_id_binary = Ecto.UUID.dump!(tag_id)
+
     Repo.delete_all(
       from et in "entity_tags",
-        where: et.entity_id == ^entity.id and et.tag_id == ^tag_id
+        where: et.entity_id == ^entity_id_binary and et.tag_id == ^tag_id_binary
     )
     {:ok, entity}
   end
@@ -380,8 +402,15 @@ defmodule Conezia.Entities do
   def add_entities_to_group(%Group{} = group, entity_ids) when is_list(entity_ids) do
     now = DateTime.utc_now()
 
+    # Convert string UUIDs to binary for raw table insert
+    group_id_binary = Ecto.UUID.dump!(group.id)
+
     entries = Enum.map(entity_ids, fn entity_id ->
-      %{entity_id: entity_id, group_id: group.id, added_at: now}
+      %{
+        entity_id: Ecto.UUID.dump!(entity_id),
+        group_id: group_id_binary,
+        added_at: now
+      }
     end)
 
     Repo.insert_all("entity_groups", entries, on_conflict: :nothing)
@@ -393,9 +422,13 @@ defmodule Conezia.Entities do
   end
 
   def remove_entity_from_group(%Group{} = group, entity_id) do
+    # Convert string UUIDs to binary for raw table query
+    group_id_binary = Ecto.UUID.dump!(group.id)
+    entity_id_binary = Ecto.UUID.dump!(entity_id)
+
     Repo.delete_all(
       from eg in "entity_groups",
-        where: eg.group_id == ^group.id and eg.entity_id == ^entity_id
+        where: eg.group_id == ^group_id_binary and eg.entity_id == ^entity_id_binary
     )
     {:ok, group}
   end
@@ -408,9 +441,12 @@ defmodule Conezia.Entities do
   end
 
   def list_group_members(%Group{} = group, user_id) when is_binary(user_id) do
+    # Convert string UUID to binary for raw table join
+    group_id_binary = Ecto.UUID.dump!(group.id)
+
     entities = Entity
     |> join(:inner, [e], eg in "entity_groups", on: eg.entity_id == e.id)
-    |> where([e, eg], eg.group_id == ^group.id)
+    |> where([e, eg], eg.group_id == ^group_id_binary)
     |> Repo.all()
 
     {entities, %{has_more: false, next_cursor: nil}}
@@ -422,9 +458,12 @@ defmodule Conezia.Entities do
     entities = if group.is_smart do
       compute_smart_group_members(group, group.user_id)
     else
+      # Convert string UUID to binary for raw table join
+      group_id_binary = Ecto.UUID.dump!(group.id)
+
       Entity
       |> join(:inner, [e], eg in "entity_groups", on: eg.entity_id == e.id)
-      |> where([e, eg], eg.group_id == ^group.id)
+      |> where([e, eg], eg.group_id == ^group_id_binary)
       |> limit(^limit)
       |> Repo.all()
     end
@@ -497,7 +536,7 @@ defmodule Conezia.Entities do
           end
 
           # Check for duplicates
-          duplicates = find_duplicates(attrs["user_id"], [
+          duplicates = find_duplicates(attrs["owner_id"], [
             name: entity.name,
             email: Enum.find_value(attrs["identifiers"] || [], fn
               %{"type" => "email", "value" => v} -> v
@@ -518,6 +557,7 @@ defmodule Conezia.Entities do
     end
   end
 
+  def find_duplicates(nil, _opts), do: []
   def find_duplicates(user_id, opts) do
     name = Keyword.get(opts, :name)
     email = Keyword.get(opts, :email)

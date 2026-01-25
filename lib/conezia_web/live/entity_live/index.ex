@@ -10,7 +10,7 @@ defmodule ConeziaWeb.EntityLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
-    entities = Entities.list_entities(user.id)
+    {entities, _meta} = Entities.list_entities(user.id)
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
@@ -47,7 +47,7 @@ defmodule ConeziaWeb.EntityLive.Index do
     user = socket.assigns.current_user
     type = socket.assigns.type_filter
 
-    entities = Entities.list_entities(user.id, search: search, type: type)
+    {entities, _meta} = Entities.list_entities(user.id, search: search, type: type)
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
@@ -65,7 +65,7 @@ defmodule ConeziaWeb.EntityLive.Index do
     search = socket.assigns.search
     type = if type == "", do: nil, else: type
 
-    entities = Entities.list_entities(user.id, search: search, type: type)
+    {entities, _meta} = Entities.list_entities(user.id, search: search, type: type)
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
