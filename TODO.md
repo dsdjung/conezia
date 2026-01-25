@@ -7,5 +7,13 @@ Feature completeness and correctness
 Test completeness and correctness
 e2e testing
 
+
+Import Adapters Not Implemented: The design mentions adapters for Google Contacts, CSV, vCard in lib/conezia/imports/adapters/ but these appear to be planned (part of the integration framework plan)
+
+Some Health Features Incomplete: get_weekly_digest returns hardcoded zeros for relationships_improved and relationships_declining
+
+What external integration makes sense
+
+
 Android and iOS app with feature parity and consistent user experience.
 
