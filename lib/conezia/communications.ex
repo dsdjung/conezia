@@ -122,6 +122,17 @@ defmodule Conezia.Communications do
     |> Repo.one()
   end
 
+  @doc """
+  Get a communication by its external ID (e.g., Gmail message ID).
+  Returns nil if not found.
+  """
+  def get_communication_by_external_id(external_id) when is_binary(external_id) do
+    Communication
+    |> where([c], c.external_id == ^external_id)
+    |> Repo.one()
+  end
+  def get_communication_by_external_id(_), do: nil
+
   def create_communication(attrs) do
     Repo.transaction(fn ->
       changeset = Communication.changeset(%Communication{}, attrs)

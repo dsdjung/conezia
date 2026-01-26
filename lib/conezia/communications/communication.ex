@@ -14,8 +14,10 @@ defmodule Conezia.Communications.Communication do
   schema "communications" do
     field :channel, :string
     field :direction, :string
+    field :subject, :string
     field :content, :string
     field :attachments, {:array, :map}, default: []
+    field :metadata, :map, default: %{}
     field :sent_at, :utc_datetime_usec
     field :read_at, :utc_datetime_usec
     field :external_id, :string
@@ -27,8 +29,8 @@ defmodule Conezia.Communications.Communication do
     timestamps(type: :utc_datetime_usec)
   end
 
-  @required_fields [:channel, :direction, :content, :user_id, :entity_id]
-  @optional_fields [:conversation_id, :attachments, :sent_at, :read_at, :external_id]
+  @required_fields [:channel, :direction, :content, :user_id]
+  @optional_fields [:entity_id, :conversation_id, :subject, :attachments, :metadata, :sent_at, :read_at, :external_id]
 
   def changeset(communication, attrs) do
     communication

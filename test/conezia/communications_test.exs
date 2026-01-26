@@ -134,5 +134,23 @@ defmodule Conezia.CommunicationsTest do
 
       assert is_nil(Communications.get_last_communication_for_entity(entity.id))
     end
+
+    test "get_communication_by_external_id/1 returns communication" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      conversation = insert(:conversation, user: user, entity: entity)
+      communication = insert(:communication, entity: entity, conversation: conversation, external_id: "gmail_123")
+
+      result = Communications.get_communication_by_external_id("gmail_123")
+      assert result.id == communication.id
+    end
+
+    test "get_communication_by_external_id/1 returns nil when not found" do
+      assert is_nil(Communications.get_communication_by_external_id("nonexistent_id"))
+    end
+
+    test "get_communication_by_external_id/1 returns nil for nil input" do
+      assert is_nil(Communications.get_communication_by_external_id(nil))
+    end
   end
 end

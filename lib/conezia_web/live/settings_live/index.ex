@@ -7,6 +7,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
   alias Conezia.Integrations
   alias Conezia.ExternalAccounts
   alias Conezia.Workers.SyncWorker
+  alias Conezia.Workers.GmailSyncWorker
 
   @tabs ~w(integrations account)
 
@@ -17,6 +18,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
     # Subscribe to sync updates for this user
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Conezia.PubSub, SyncWorker.topic(user.id))
+      Phoenix.PubSub.subscribe(Conezia.PubSub, GmailSyncWorker.topic(user.id))
     end
 
     socket =
@@ -24,6 +26,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
       |> assign(:page_title, "Settings")
       |> assign(:current_tab, "integrations")
       |> assign(:syncing, false)
+      |> assign(:syncing_messages, false)
       |> assign_services(user)
       |> assign_import_jobs(user)
 
@@ -86,6 +89,41 @@ defmodule ConeziaWeb.SettingsLive.Index do
     end
   end
 
+  def handle_event("sync_messages", %{"id" => account_id}, socket) do
+    user = socket.assigns.current_user
+
+    case ExternalAccounts.get_external_account_for_user(account_id, user.id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Account not found")}
+
+      account ->
+        if account.service_name == "google" do
+          # Enqueue Gmail sync worker
+          job_args = %{
+            "external_account_id" => account.id,
+            "user_id" => user.id,
+            "days_back" => 30,
+            "max_messages" => 500
+          }
+
+          case Oban.insert(GmailSyncWorker.new(job_args)) do
+            {:ok, _job} ->
+              socket =
+                socket
+                |> assign(:syncing_messages, true)
+                |> put_flash(:info, "Starting Gmail message sync...")
+
+              {:noreply, socket}
+
+            {:error, reason} ->
+              {:noreply, put_flash(socket, :error, "Failed to start sync: #{inspect(reason)}")}
+          end
+        else
+          {:noreply, put_flash(socket, :error, "Message sync is only available for Google accounts")}
+        end
+    end
+  end
+
   # Handle PubSub messages for sync status updates
   @impl true
   def handle_info({:sync_status, :started, _payload}, socket) do
@@ -116,6 +154,37 @@ defmodule ConeziaWeb.SettingsLive.Index do
       |> put_flash(:error, "Sync failed: #{error}")
       |> assign_services(user)
       |> assign_import_jobs(user)
+
+    {:noreply, socket}
+  end
+
+  # Gmail sync status handlers
+  def handle_info({:gmail_sync_status, :started, _payload}, socket) do
+    {:noreply, assign(socket, :syncing_messages, true)}
+  end
+
+  def handle_info({:gmail_sync_status, :completed, payload}, socket) do
+    user = socket.assigns.current_user
+    stats = payload[:stats] || %{}
+
+    socket =
+      socket
+      |> assign(:syncing_messages, false)
+      |> put_flash(:info, "Gmail sync completed: #{stats[:imported] || 0} messages imported, #{stats[:linked] || 0} linked to connections")
+      |> assign_services(user)
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:gmail_sync_status, :failed, payload}, socket) do
+    user = socket.assigns.current_user
+    error = payload[:error] || "Unknown error"
+
+    socket =
+      socket
+      |> assign(:syncing_messages, false)
+      |> put_flash(:error, "Gmail sync failed: #{error}")
+      |> assign_services(user)
 
     {:noreply, socket}
   end
@@ -159,7 +228,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
 
       <!-- Tab Content -->
       <div :if={@current_tab == "integrations"}>
-        <.integrations_content services={@services} import_jobs={@import_jobs} syncing={@syncing} />
+        <.integrations_content services={@services} import_jobs={@import_jobs} syncing={@syncing} syncing_messages={@syncing_messages} />
       </div>
 
       <div :if={@current_tab == "account"}>
@@ -173,6 +242,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
   attr :services, :list, required: true
   attr :import_jobs, :list, required: true
   attr :syncing, :boolean, default: false
+  attr :syncing_messages, :boolean, default: false
 
   defp integrations_content(assigns) do
     ~H"""
@@ -233,17 +303,35 @@ defmodule ConeziaWeb.SettingsLive.Index do
                       "hero-arrow-path -ml-0.5 mr-1.5 h-4 w-4",
                       @syncing && "animate-spin"
                     ]} />
-                    <%= if @syncing, do: "Syncing...", else: "Sync" %>
+                    <%= if @syncing, do: "Syncing...", else: "Sync Contacts" %>
+                  </button>
+                  <!-- Gmail Message Sync - Only for Google -->
+                  <button
+                    :if={service.service == "google"}
+                    phx-click="sync_messages"
+                    phx-value-id={service.account.id}
+                    disabled={@syncing_messages}
+                    class={[
+                      "inline-flex items-center rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset ring-gray-300",
+                      @syncing_messages && "bg-gray-100 text-gray-400 cursor-not-allowed",
+                      !@syncing_messages && "bg-white text-gray-900 hover:bg-gray-50"
+                    ]}
+                  >
+                    <span class={[
+                      "hero-envelope -ml-0.5 mr-1.5 h-4 w-4",
+                      @syncing_messages && "animate-pulse"
+                    ]} />
+                    <%= if @syncing_messages, do: "Syncing...", else: "Sync Messages" %>
                   </button>
                   <button
                     phx-click="disconnect"
                     phx-value-id={service.account.id}
-                    disabled={@syncing}
+                    disabled={@syncing || @syncing_messages}
                     data-confirm="Are you sure you want to disconnect this service?"
                     class={[
                       "inline-flex items-center rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset ring-gray-300",
-                      @syncing && "bg-gray-100 text-gray-400 cursor-not-allowed",
-                      !@syncing && "bg-white text-red-600 hover:bg-gray-50"
+                      (@syncing || @syncing_messages) && "bg-gray-100 text-gray-400 cursor-not-allowed",
+                      !(@syncing || @syncing_messages) && "bg-white text-red-600 hover:bg-gray-50"
                     ]}
                   >
                     Disconnect
