@@ -259,20 +259,28 @@ defmodule Conezia.Integrations.Providers.Google do
   # ============================================================================
 
   defp fetch_from_calendar(access_token) do
+    # Fetch events from the past year for more comprehensive contact history
     time_min =
       DateTime.utc_now()
-      |> DateTime.add(-90, :day)
+      |> DateTime.add(-365, :day)
       |> DateTime.to_iso8601()
 
     time_max = DateTime.utc_now() |> DateTime.to_iso8601()
 
+    # Fetch all calendar events with pagination
+    fetch_all_calendar_events(access_token, time_min, time_max, nil, [])
+  end
+
+  defp fetch_all_calendar_events(access_token, time_min, time_max, page_token, accumulated) do
     params = %{
       timeMin: time_min,
       timeMax: time_max,
-      maxResults: 250,
+      maxResults: 500,
       singleEvents: true,
       orderBy: "startTime"
     }
+
+    params = if page_token, do: Map.put(params, :pageToken, page_token), else: params
 
     url = "#{@google_calendar_api}/calendars/primary/events?#{URI.encode_query(params)}"
     headers = [{"authorization", "Bearer #{access_token}"}]
@@ -280,7 +288,15 @@ defmodule Conezia.Integrations.Providers.Google do
     case Req.get(url, headers: headers) do
       {:ok, %{status: 200, body: body}} ->
         contacts = extract_calendar_contacts(body["items"] || [])
-        {:ok, contacts}
+        all_contacts = accumulated ++ contacts
+
+        case body["nextPageToken"] do
+          nil ->
+            {:ok, all_contacts}
+
+          next_token ->
+            fetch_all_calendar_events(access_token, time_min, time_max, next_token, all_contacts)
+        end
 
       {:ok, %{status: 401}} ->
         {:error, "Token expired or invalid"}
@@ -375,24 +391,51 @@ defmodule Conezia.Integrations.Providers.Google do
   # ============================================================================
 
   defp fetch_from_gmail(access_token) do
-    # Fetch messages from the past 90 days
+    # Fetch messages from the past year for comprehensive contact history
     after_date =
       Date.utc_today()
-      |> Date.add(-90)
+      |> Date.add(-365)
       |> Date.to_iso8601()
       |> String.replace("-", "/")
 
     query = "after:#{after_date}"
-    params = %{q: query, maxResults: 100}
+    headers = [{"authorization", "Bearer #{access_token}"}]
+
+    # Fetch message IDs with pagination
+    case fetch_all_gmail_message_ids(headers, query, nil, []) do
+      {:ok, message_ids} ->
+        contacts = fetch_gmail_contacts_from_messages(message_ids, headers)
+        {:ok, contacts}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp fetch_all_gmail_message_ids(headers, query, page_token, accumulated) do
+    params = %{q: query, maxResults: 500}
+    params = if page_token, do: Map.put(params, :pageToken, page_token), else: params
 
     url = "#{@gmail_api}/users/me/messages?#{URI.encode_query(params)}"
-    headers = [{"authorization", "Bearer #{access_token}"}]
 
     case Req.get(url, headers: headers) do
       {:ok, %{status: 200, body: body}} ->
         message_ids = Enum.map(body["messages"] || [], & &1["id"])
-        contacts = fetch_gmail_contacts_from_messages(message_ids, headers)
-        {:ok, contacts}
+        all_ids = accumulated ++ message_ids
+
+        # Limit total messages to 2000 to avoid excessive API calls
+        # Each message requires a separate API call to fetch headers
+        if length(all_ids) >= 2000 do
+          {:ok, Enum.take(all_ids, 2000)}
+        else
+          case body["nextPageToken"] do
+            nil ->
+              {:ok, all_ids}
+
+            next_token ->
+              fetch_all_gmail_message_ids(headers, query, next_token, all_ids)
+          end
+        end
 
       {:ok, %{status: 401}} ->
         {:error, "Token expired or invalid"}
@@ -411,8 +454,10 @@ defmodule Conezia.Integrations.Providers.Google do
   end
 
   defp fetch_gmail_contacts_from_messages(message_ids, headers) do
+    # Process messages in batches to extract contacts
+    # Limit to 500 messages to balance completeness with API rate limits
     message_ids
-    |> Enum.take(50)
+    |> Enum.take(500)
     |> Enum.flat_map(fn id -> fetch_gmail_message_contacts(id, headers) end)
     |> Enum.reject(&is_nil/1)
   end
