@@ -226,8 +226,9 @@ defmodule ConeziaWeb.EntityLive.Show do
     user = socket.assigns.current_user
     entity = socket.assigns.entity
 
-    # Get other entities of the same type to merge with (exclude current entity)
-    {all_entities, _meta} = Entities.list_entities(user.id, type: entity.type)
+    # Get ALL entities of the same type to merge with (no pagination limit)
+    # Using a high limit to fetch all candidates for the merge picker
+    {all_entities, _meta} = Entities.list_entities(user.id, type: entity.type, limit: 10_000)
     merge_candidates = Enum.reject(all_entities, fn e -> e.id == entity.id end)
 
     {:noreply,
