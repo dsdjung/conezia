@@ -181,23 +181,24 @@ defmodule Conezia.Entities do
   end
 
   defp merge_entity_tags(source, target, summary) do
+    # Convert string UUIDs to binary for raw table queries
+    source_id_binary = Ecto.UUID.dump!(source.id)
+    target_id_binary = Ecto.UUID.dump!(target.id)
+
     # Get source entity tags
     source_tag_ids = Repo.all(
       from et in "entity_tags",
-        where: et.entity_id == ^source.id,
+        where: et.entity_id == ^source_id_binary,
         select: et.tag_id
     )
 
     existing_tag_ids = Repo.all(
       from et in "entity_tags",
-        where: et.entity_id == ^target.id,
+        where: et.entity_id == ^target_id_binary,
         select: et.tag_id
     )
 
     new_tag_ids = source_tag_ids -- existing_tag_ids
-
-    # Convert string UUIDs to binary for raw table insert
-    target_id_binary = Ecto.UUID.dump!(target.id)
 
     Enum.each(new_tag_ids, fn tag_id ->
       Repo.insert_all("entity_tags", [
