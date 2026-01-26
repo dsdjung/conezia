@@ -31,3 +31,6 @@ conezia-*.tar
 
 .client_secret.apps.googleusercontent.com.json
 .elixir_ls/
+
+# Logo/branding assets
+logo/

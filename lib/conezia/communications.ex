@@ -110,6 +110,18 @@ defmodule Conezia.Communications do
     |> Repo.all()
   end
 
+  @doc """
+  Get the most recent communication for an entity.
+  Returns nil if no communications exist.
+  """
+  def get_last_communication_for_entity(entity_id) do
+    Communication
+    |> where([c], c.entity_id == ^entity_id)
+    |> order_by([c], desc: c.sent_at)
+    |> limit(1)
+    |> Repo.one()
+  end
+
   def create_communication(attrs) do
     Repo.transaction(fn ->
       changeset = Communication.changeset(%Communication{}, attrs)

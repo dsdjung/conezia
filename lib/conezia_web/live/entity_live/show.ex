@@ -8,6 +8,7 @@ defmodule ConeziaWeb.EntityLive.Show do
   alias Conezia.Entities.{Relationship, EntityRelationship}
   alias Conezia.Interactions
   alias Conezia.Reminders
+  alias Conezia.Communications
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -26,6 +27,8 @@ defmodule ConeziaWeb.EntityLive.Show do
         entity_relationships = Entities.list_entity_relationships_for_entity(entity.id, user.id)
         active_identifiers = Entities.list_active_identifiers_for_entity(entity.id)
         archived_identifiers = Entities.list_archived_identifiers_for_entity(entity.id)
+        last_communication = Communications.get_last_communication_for_entity(entity.id)
+        last_event = Interactions.get_last_event_for_entity(entity.id, user.id)
 
         socket =
           socket
@@ -39,6 +42,8 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:show_archived_identifiers, false)
           |> assign(:interactions, list_interactions(entity.id, user.id))
           |> assign(:reminders, list_reminders(entity.id, user.id))
+          |> assign(:last_communication, last_communication)
+          |> assign(:last_event, last_event)
           |> assign(:editing_custom_field, nil)
           |> assign(:new_custom_field, nil)
           |> assign(:adding_entity_relationship, false)
@@ -1333,8 +1338,45 @@ defmodule ConeziaWeb.EntityLive.Show do
           </.card>
         </div>
 
-        <!-- Sidebar with reminders -->
+        <!-- Sidebar with activity and reminders -->
         <div class="space-y-6">
+          <!-- Activity Summary (Last Communication & Event) -->
+          <.card :if={@last_communication || @last_event}>
+            <:header>Activity</:header>
+            <div class="space-y-4">
+              <!-- Last Communication -->
+              <div :if={@last_communication} class="flex items-start gap-3">
+                <div class="flex-shrink-0">
+                  <span class={["inline-flex h-8 w-8 items-center justify-center rounded-lg", communication_channel_bg(@last_communication.channel)]}>
+                    <.icon name={communication_channel_icon(@last_communication.channel)} class="h-4 w-4 text-white" />
+                  </span>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-gray-900">Last Communication</p>
+                  <p class="text-xs text-gray-500">{String.capitalize(@last_communication.channel)}</p>
+                  <p class="mt-1 text-xs text-gray-400">{format_datetime(@last_communication.sent_at)}</p>
+                  <p :if={@last_communication.direction} class="text-xs text-gray-400">
+                    {if @last_communication.direction == "inbound", do: "Received", else: "Sent"}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Last Event/Meeting -->
+              <div :if={@last_event} class="flex items-start gap-3">
+                <div class="flex-shrink-0">
+                  <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
+                    <.icon name="hero-calendar" class="h-4 w-4 text-purple-600" />
+                  </span>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-gray-900">Last {String.capitalize(@last_event.type)}</p>
+                  <p :if={@last_event.title} class="text-xs text-gray-500 truncate">{@last_event.title}</p>
+                  <p class="mt-1 text-xs text-gray-400">{format_datetime(@last_event.occurred_at)}</p>
+                </div>
+              </div>
+            </div>
+          </.card>
+
           <.card>
             <:header>
               <div class="flex items-center justify-between">
@@ -1625,4 +1667,19 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp identifier_placeholder("email"), do: "name@example.com"
   defp identifier_placeholder("phone"), do: "+1 (555) 123-4567"
   defp identifier_placeholder(_), do: "Value"
+
+  # Communication channel styling helpers
+  defp communication_channel_icon("email"), do: "hero-envelope"
+  defp communication_channel_icon("sms"), do: "hero-chat-bubble-left"
+  defp communication_channel_icon("whatsapp"), do: "hero-chat-bubble-left-ellipsis"
+  defp communication_channel_icon("telegram"), do: "hero-paper-airplane"
+  defp communication_channel_icon("phone"), do: "hero-phone"
+  defp communication_channel_icon(_), do: "hero-chat-bubble-left-right"
+
+  defp communication_channel_bg("email"), do: "bg-red-500"
+  defp communication_channel_bg("sms"), do: "bg-green-500"
+  defp communication_channel_bg("whatsapp"), do: "bg-green-600"
+  defp communication_channel_bg("telegram"), do: "bg-blue-500"
+  defp communication_channel_bg("phone"), do: "bg-indigo-500"
+  defp communication_channel_bg(_), do: "bg-gray-500"
 end

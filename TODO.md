@@ -17,3 +17,11 @@ What external integration makes sense
 
 Android and iOS app with feature parity and consistent user experience.
 
+Additional possible considerations for deduplicating
+- store connection's id from the service the connection was synced from.
+- display where the connection was synced from on UI.
+- provide UI mechanism to select connections and combine them into a single connection
+- store all the service ids from which the synced connections were merged from
+- further sync should now be able to refer to the combined connection if id match
+
+If I sync again, we need to handle a case where there is changed data for a connection from the last time it was synced.

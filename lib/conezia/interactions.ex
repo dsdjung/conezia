@@ -169,6 +169,20 @@ defmodule Conezia.Interactions do
     {interactions, %{has_more: false, next_cursor: nil}}
   end
 
+  @doc """
+  Get the most recent event or meeting interaction for an entity.
+  Returns nil if no calendar events exist.
+  """
+  def get_last_event_for_entity(entity_id, user_id) do
+    from(i in Interaction,
+      where: i.entity_id == ^entity_id and i.user_id == ^user_id,
+      where: i.type in ["event", "meeting"],
+      order_by: [desc: i.occurred_at],
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
   def list_activity_for_entity(entity_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
 

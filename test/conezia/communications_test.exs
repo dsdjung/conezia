@@ -112,5 +112,27 @@ defmodule Conezia.CommunicationsTest do
       assert {:ok, read} = Communications.mark_communication_as_read(communication)
       assert read.read_at
     end
+
+    test "get_last_communication_for_entity/1 returns most recent communication" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      conversation = insert(:conversation, user: user, entity: entity)
+
+      old_time = DateTime.add(DateTime.utc_now(), -3600, :second)
+      recent_time = DateTime.utc_now()
+
+      _old_comm = insert(:communication, entity: entity, conversation: conversation, sent_at: old_time)
+      recent_comm = insert(:communication, entity: entity, conversation: conversation, sent_at: recent_time)
+
+      result = Communications.get_last_communication_for_entity(entity.id)
+      assert result.id == recent_comm.id
+    end
+
+    test "get_last_communication_for_entity/1 returns nil when no communications" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+
+      assert is_nil(Communications.get_last_communication_for_entity(entity.id))
+    end
   end
 end
