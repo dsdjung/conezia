@@ -131,7 +131,7 @@ defmodule Conezia.Integrations.Gmail do
 
     case Req.get(url, headers: headers) do
       {:ok, %{status: 200, body: body}} ->
-        parse_message_response(body, contact_email, user_email)
+        parse_message_response(body, message_id, contact_email, user_email)
 
       {:ok, %{status: _}} ->
         {:error, :message_fetch_failed}
@@ -141,10 +141,11 @@ defmodule Conezia.Integrations.Gmail do
     end
   end
 
-  defp parse_message_response(body, contact_email, user_email) do
+  defp parse_message_response(body, message_id, contact_email, user_email) do
     headers = body["payload"]["headers"] || []
     internal_date = body["internalDate"]
     snippet = body["snippet"]
+    thread_id = body["threadId"]
 
     from_header = find_header(headers, "From")
     to_header = find_header(headers, "To")
@@ -164,13 +165,19 @@ defmodule Conezia.Integrations.Gmail do
     from_email = extract_email_from_header(from_header)
     direction = determine_direction(from_email, contact_email, user_email)
 
+    # Build Gmail URL to open this message
+    gmail_url = "https://mail.google.com/mail/u/0/#inbox/#{thread_id || message_id}"
+
     {:ok, %{
+      message_id: message_id,
+      thread_id: thread_id,
       subject: subject,
       date: date,
       direction: direction,
       snippet: snippet,
       from: from_header,
-      to: to_header
+      to: to_header,
+      gmail_url: gmail_url
     }}
   end
 

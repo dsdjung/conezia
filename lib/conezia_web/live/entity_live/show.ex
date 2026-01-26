@@ -1350,21 +1350,24 @@ defmodule ConeziaWeb.EntityLive.Show do
             <:header>Activity</:header>
             <div class="space-y-4">
               <!-- Last Gmail Email (on-demand from Gmail API) -->
-              <div :if={@last_gmail_email} class="flex items-start gap-3">
+              <a :if={@last_gmail_email} href={@last_gmail_email.gmail_url} target="_blank" rel="noopener noreferrer" class="flex items-start gap-3 p-2 -m-2 rounded-lg hover:bg-gray-50 transition-colors group">
                 <div class="flex-shrink-0">
                   <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-500">
                     <.icon name="hero-envelope" class="h-4 w-4 text-white" />
                   </span>
                 </div>
                 <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-gray-900">Last Email</p>
+                  <p class="text-sm font-medium text-gray-900 group-hover:text-indigo-600">Last Email</p>
                   <p :if={@last_gmail_email.subject} class="text-xs text-gray-600 truncate">{@last_gmail_email.subject}</p>
                   <p class="mt-1 text-xs text-gray-400">{format_datetime(@last_gmail_email.date)}</p>
                   <p :if={@last_gmail_email.direction} class="text-xs text-gray-400">
                     {if @last_gmail_email.direction == "inbound", do: "Received", else: "Sent"}
                   </p>
                 </div>
-              </div>
+                <div class="flex-shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4 text-gray-400" />
+                </div>
+              </a>
 
               <!-- Last Communication (from database) -->
               <div :if={@last_communication && !@last_gmail_email} class="flex items-start gap-3">
