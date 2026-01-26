@@ -1188,4 +1188,333 @@ defmodule Conezia.Entities do
     Map.update(acc, entity_id, [entry], fn existing -> [entry | existing] end)
   end
 
+  # ============================================================================
+  # Deduplication Functions
+  # ============================================================================
+
+  @doc """
+  Find all duplicate entity groups for a user.
+
+  Returns a list of duplicate groups, where each group contains entities that
+  are likely duplicates of each other based on:
+  - Exact email match
+  - Exact phone match
+  - Similar names (>0.6 similarity threshold)
+
+  Each group has a primary entity (the one to keep) and duplicate entities.
+  """
+  def find_all_duplicates(user_id) do
+    # Get all entities with their identifiers
+    entities =
+      from(e in Entity,
+        where: e.owner_id == ^user_id and is_nil(e.archived_at),
+        preload: [:identifiers],
+        order_by: [asc: e.inserted_at]
+      )
+      |> Repo.all()
+
+    # Build lookup maps for matching
+    email_map = build_identifier_map(entities, "email")
+    phone_map = build_identifier_map(entities, "phone")
+
+    # Find duplicate groups
+    find_duplicate_groups(entities, email_map, phone_map)
+  end
+
+  defp build_identifier_map(entities, type) do
+    Enum.reduce(entities, %{}, fn entity, acc ->
+      entity.identifiers
+      |> Enum.filter(&(&1.type == type && &1.value))
+      |> Enum.reduce(acc, fn identifier, inner_acc ->
+        key = String.downcase(identifier.value)
+        Map.update(inner_acc, key, [entity.id], &[entity.id | &1])
+      end)
+    end)
+  end
+
+  defp find_duplicate_groups(entities, email_map, phone_map) do
+    # Track which entities we've already grouped
+    processed = MapSet.new()
+
+    {groups, _} =
+      Enum.reduce(entities, {[], processed}, fn entity, {groups, seen} ->
+        if MapSet.member?(seen, entity.id) do
+          {groups, seen}
+        else
+          # Find all entities that match this one
+          matching_ids = find_matching_entity_ids(entity, email_map, phone_map, entities)
+
+          if length(matching_ids) > 1 do
+            # Sort by inserted_at to pick the oldest as primary
+            sorted_ids = Enum.sort_by(matching_ids, fn id ->
+              Enum.find(entities, &(&1.id == id)).inserted_at
+            end)
+
+            [primary_id | duplicate_ids] = sorted_ids
+            primary = Enum.find(entities, &(&1.id == primary_id))
+            duplicates = Enum.filter(entities, &(&1.id in duplicate_ids))
+
+            group = %{
+              primary: primary,
+              duplicates: duplicates,
+              match_reasons: get_match_reasons(primary, duplicates, email_map, phone_map)
+            }
+
+            new_seen = Enum.reduce(matching_ids, seen, &MapSet.put(&2, &1))
+            {[group | groups], new_seen}
+          else
+            {groups, MapSet.put(seen, entity.id)}
+          end
+        end
+      end)
+
+    Enum.reverse(groups)
+  end
+
+  defp find_matching_entity_ids(entity, email_map, phone_map, all_entities) do
+    # Get IDs matching by email
+    email_matches =
+      entity.identifiers
+      |> Enum.filter(&(&1.type == "email" && &1.value))
+      |> Enum.flat_map(fn id ->
+        Map.get(email_map, String.downcase(id.value), [])
+      end)
+
+    # Get IDs matching by phone
+    phone_matches =
+      entity.identifiers
+      |> Enum.filter(&(&1.type == "phone" && &1.value))
+      |> Enum.flat_map(fn id ->
+        Map.get(phone_map, String.downcase(id.value), [])
+      end)
+
+    # Get IDs matching by similar name (>0.6 similarity)
+    name_matches =
+      all_entities
+      |> Enum.filter(fn other ->
+        other.id != entity.id &&
+        name_similarity(entity.name, other.name) > 0.6
+      end)
+      |> Enum.map(& &1.id)
+
+    # Combine all matches and include self
+    ([entity.id] ++ email_matches ++ phone_matches ++ name_matches)
+    |> Enum.uniq()
+  end
+
+  defp name_similarity(name1, name2) when is_binary(name1) and is_binary(name2) do
+    # Use Jaro-Winkler similarity for names
+    n1 = String.downcase(String.trim(name1))
+    n2 = String.downcase(String.trim(name2))
+
+    if n1 == n2 do
+      1.0
+    else
+      # Simple Jaccard similarity on words
+      words1 = String.split(n1) |> MapSet.new()
+      words2 = String.split(n2) |> MapSet.new()
+
+      intersection = MapSet.intersection(words1, words2) |> MapSet.size()
+      union = MapSet.union(words1, words2) |> MapSet.size()
+
+      if union > 0, do: intersection / union, else: 0.0
+    end
+  end
+  defp name_similarity(_, _), do: 0.0
+
+  defp get_match_reasons(primary, duplicates, _email_map, _phone_map) do
+    Enum.flat_map(duplicates, fn dup ->
+      reasons = []
+
+      # Check email matches
+      primary_emails = get_identifier_values(primary, "email")
+      dup_emails = get_identifier_values(dup, "email")
+      common_emails = MapSet.intersection(primary_emails, dup_emails)
+
+      reasons = if MapSet.size(common_emails) > 0 do
+        ["email: #{Enum.join(common_emails, ", ")}" | reasons]
+      else
+        reasons
+      end
+
+      # Check phone matches
+      primary_phones = get_identifier_values(primary, "phone")
+      dup_phones = get_identifier_values(dup, "phone")
+      common_phones = MapSet.intersection(primary_phones, dup_phones)
+
+      reasons = if MapSet.size(common_phones) > 0 do
+        ["phone: #{Enum.join(common_phones, ", ")}" | reasons]
+      else
+        reasons
+      end
+
+      # Check name similarity
+      similarity = name_similarity(primary.name, dup.name)
+      if similarity > 0.6 do
+        ["name similarity: #{Float.round(similarity * 100, 1)}%" | reasons]
+      else
+        reasons
+      end
+    end)
+    |> Enum.uniq()
+  end
+
+  defp get_identifier_values(entity, type) do
+    entity.identifiers
+    |> Enum.filter(&(&1.type == type && &1.value))
+    |> Enum.map(&String.downcase(&1.value))
+    |> MapSet.new()
+  end
+
+  @doc """
+  Merge multiple duplicate entities into a primary entity.
+
+  This will:
+  1. Move all identifiers from duplicates to primary (avoiding duplicates)
+  2. Move all relationships from duplicates to primary
+  3. Move all interactions from duplicates to primary
+  4. Move all custom fields from duplicates to primary
+  5. Update primary's metadata with merged external_ids
+  6. Delete the duplicate entities
+  """
+  def merge_duplicate_entities(primary_id, duplicate_ids, user_id) when is_list(duplicate_ids) do
+    Repo.transaction(fn ->
+      # Verify all entities belong to the user
+      primary = get_entity_for_user(primary_id, user_id)
+      duplicates = Enum.map(duplicate_ids, &get_entity_for_user(&1, user_id))
+
+      if is_nil(primary) or Enum.any?(duplicates, &is_nil/1) do
+        Repo.rollback(:entity_not_found)
+      end
+
+      # Load primary with associations
+      primary = Repo.preload(primary, [:identifiers, :relationships, :custom_fields])
+
+      # Merge each duplicate into primary
+      Enum.each(duplicates, fn dup ->
+        dup = Repo.preload(dup, [:identifiers, :relationships, :custom_fields])
+        merge_single_entity(primary, dup)
+      end)
+
+      # Update primary's metadata with merged info
+      merged_count = length(duplicate_ids)
+      metadata = Map.merge(primary.metadata || %{}, %{
+        "merged_count" => (primary.metadata["merged_count"] || 0) + merged_count,
+        "last_merged_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+      })
+
+      {:ok, updated_primary} = update_entity(primary, %{metadata: metadata})
+
+      # Delete duplicates
+      Enum.each(duplicate_ids, fn dup_id ->
+        from(e in Entity, where: e.id == ^dup_id)
+        |> Repo.delete_all()
+      end)
+
+      updated_primary
+    end)
+  end
+
+  defp merge_single_entity(primary, duplicate) do
+    # Move identifiers (avoiding duplicates)
+    Enum.each(duplicate.identifiers, fn identifier ->
+      unless has_identifier?(primary.id, identifier.type, identifier.value) do
+        from(i in Identifier, where: i.id == ^identifier.id)
+        |> Repo.update_all(set: [
+          entity_id: primary.id,
+          is_primary: false,  # New identifiers are not primary
+          updated_at: DateTime.utc_now()
+        ])
+      else
+        # Delete duplicate identifier
+        Repo.delete(identifier)
+      end
+    end)
+
+    # Move relationships
+    from(r in Relationship, where: r.entity_id == ^duplicate.id)
+    |> Repo.update_all(set: [entity_id: primary.id, updated_at: DateTime.utc_now()])
+
+    # Move entity-to-entity relationships
+    from(r in EntityRelationship, where: r.source_entity_id == ^duplicate.id)
+    |> Repo.update_all(set: [source_entity_id: primary.id, updated_at: DateTime.utc_now()])
+
+    from(r in EntityRelationship, where: r.target_entity_id == ^duplicate.id)
+    |> Repo.update_all(set: [target_entity_id: primary.id, updated_at: DateTime.utc_now()])
+
+    # Move interactions
+    from(i in Conezia.Interactions.Interaction, where: i.entity_id == ^duplicate.id)
+    |> Repo.update_all(set: [entity_id: primary.id, updated_at: DateTime.utc_now()])
+
+    # Move conversations
+    from(c in Conezia.Communications.Conversation, where: c.entity_id == ^duplicate.id)
+    |> Repo.update_all(set: [entity_id: primary.id, updated_at: DateTime.utc_now()])
+
+    # Move reminders
+    from(r in Conezia.Reminders.Reminder, where: r.entity_id == ^duplicate.id)
+    |> Repo.update_all(set: [entity_id: primary.id, updated_at: DateTime.utc_now()])
+
+    # Move custom fields (avoiding duplicates by name)
+    existing_field_names =
+      primary.custom_fields
+      |> Enum.map(&{&1.name, &1.category})
+      |> MapSet.new()
+
+    Enum.each(duplicate.custom_fields, fn field ->
+      if MapSet.member?(existing_field_names, {field.name, field.category}) do
+        Repo.delete(field)
+      else
+        from(cf in CustomField, where: cf.id == ^field.id)
+        |> Repo.update_all(set: [entity_id: primary.id, updated_at: DateTime.utc_now()])
+      end
+    end)
+
+    # Move tags - use type annotation for binary_id
+    dup_id = Ecto.UUID.dump!(duplicate.id)
+    Repo.query!("DELETE FROM entity_tags WHERE entity_id = $1", [dup_id])
+
+    # Note: We don't copy tags as they might create duplicates
+
+    # Move group memberships
+    Repo.query!("DELETE FROM entity_groups WHERE entity_id = $1", [dup_id])
+
+    # Merge description if primary doesn't have one
+    if is_nil(primary.description) && duplicate.description do
+      update_entity(primary, %{description: duplicate.description})
+    end
+
+    # Merge avatar if primary doesn't have one
+    if is_nil(primary.avatar_url) && duplicate.avatar_url do
+      update_entity(primary, %{avatar_url: duplicate.avatar_url})
+    end
+
+    # Merge last_interaction_at (keep the most recent)
+    if duplicate.last_interaction_at do
+      if is_nil(primary.last_interaction_at) ||
+         DateTime.compare(duplicate.last_interaction_at, primary.last_interaction_at) == :gt do
+        update_entity(primary, %{last_interaction_at: duplicate.last_interaction_at})
+      end
+    end
+  end
+
+  @doc """
+  Automatically merge all duplicate groups for a user.
+
+  Returns {:ok, merged_count} or {:error, reason}.
+  """
+  def auto_merge_duplicates(user_id) do
+    groups = find_all_duplicates(user_id)
+
+    results =
+      Enum.map(groups, fn group ->
+        duplicate_ids = Enum.map(group.duplicates, & &1.id)
+        merge_duplicate_entities(group.primary.id, duplicate_ids, user_id)
+      end)
+
+    successful = Enum.count(results, &match?({:ok, _}, &1))
+    failed = Enum.count(results, &match?({:error, _}, &1))
+
+    {:ok, %{merged_groups: successful, failed_groups: failed, total_duplicates_removed: Enum.sum(Enum.map(groups, &length(&1.duplicates)))}}
+  end
+
 end

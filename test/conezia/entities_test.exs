@@ -156,6 +156,104 @@ defmodule Conezia.EntitiesTest do
     end
   end
 
+  describe "duplicate detection and merging" do
+    test "find_all_duplicates/1 finds entities with matching emails" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user, name: "John Doe")
+      entity2 = insert(:entity, owner: user, name: "John D.")
+      insert(:identifier, entity: entity1, type: "email", value: "john@example.com")
+      insert(:identifier, entity: entity2, type: "email", value: "john@example.com")
+
+      groups = Entities.find_all_duplicates(user.id)
+
+      assert length(groups) == 1
+      group = hd(groups)
+      # Primary is the oldest (first inserted)
+      assert group.primary.id == entity1.id
+      assert length(group.duplicates) == 1
+      assert hd(group.duplicates).id == entity2.id
+    end
+
+    test "find_all_duplicates/1 finds entities with matching phones" do
+      user = insert(:user)
+      entity1 = insert(:entity, owner: user, name: "Jane Smith")
+      entity2 = insert(:entity, owner: user, name: "Jane S.")
+      insert(:identifier, entity: entity1, type: "phone", value: "+12025551234")
+      insert(:identifier, entity: entity2, type: "phone", value: "+12025551234")
+
+      groups = Entities.find_all_duplicates(user.id)
+
+      assert length(groups) == 1
+    end
+
+    test "find_all_duplicates/1 finds entities with similar names" do
+      user = insert(:user)
+      _entity1 = insert(:entity, owner: user, name: "Robert Johnson")
+      _entity2 = insert(:entity, owner: user, name: "Robert Johnson Jr")
+
+      groups = Entities.find_all_duplicates(user.id)
+
+      # Similar names should be grouped
+      assert length(groups) == 1
+    end
+
+    test "find_all_duplicates/1 does not group unrelated entities" do
+      user = insert(:user)
+      _entity1 = insert(:entity, owner: user, name: "Alice")
+      _entity2 = insert(:entity, owner: user, name: "Bob")
+
+      groups = Entities.find_all_duplicates(user.id)
+
+      assert Enum.empty?(groups)
+    end
+
+    test "merge_duplicate_entities/3 merges entities and moves identifiers" do
+      user = insert(:user)
+      primary = insert(:entity, owner: user, name: "Primary Person")
+      duplicate = insert(:entity, owner: user, name: "Duplicate Person")
+      insert(:identifier, entity: primary, type: "email", value: "primary@example.com")
+      insert(:identifier, entity: duplicate, type: "email", value: "dup@example.com")
+      insert(:identifier, entity: duplicate, type: "phone", value: "+12025559999")
+
+      {:ok, merged} = Entities.merge_duplicate_entities(primary.id, [duplicate.id], user.id)
+
+      assert merged.id == primary.id
+
+      # Duplicate should be deleted
+      assert is_nil(Entities.get_entity(duplicate.id))
+
+      # Identifiers should be moved
+      assert Entities.has_identifier?(primary.id, "email", "primary@example.com")
+      assert Entities.has_identifier?(primary.id, "email", "dup@example.com")
+      assert Entities.has_identifier?(primary.id, "phone", "+12025559999")
+    end
+
+    test "auto_merge_duplicates/1 merges all duplicate groups" do
+      user = insert(:user)
+
+      # Create first duplicate group (email match)
+      entity1 = insert(:entity, owner: user, name: "Person One")
+      entity2 = insert(:entity, owner: user, name: "Person 1")
+      insert(:identifier, entity: entity1, type: "email", value: "person1@example.com")
+      insert(:identifier, entity: entity2, type: "email", value: "person1@example.com")
+
+      # Create second duplicate group (phone match)
+      entity3 = insert(:entity, owner: user, name: "Another Person")
+      entity4 = insert(:entity, owner: user, name: "Another P.")
+      insert(:identifier, entity: entity3, type: "phone", value: "+12025551111")
+      insert(:identifier, entity: entity4, type: "phone", value: "+12025551111")
+
+      {:ok, stats} = Entities.auto_merge_duplicates(user.id)
+
+      assert stats.merged_groups == 2
+      assert stats.total_duplicates_removed == 2
+
+      # Should only have 2 entities left
+      {entities, _} = Entities.list_entities(user.id)
+      assert length(entities) == 2
+    end
+  end
+
   describe "relationships" do
     test "create_relationship/1 creates relationship" do
       user = insert(:user)
