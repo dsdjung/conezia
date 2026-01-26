@@ -228,16 +228,19 @@ defmodule Conezia.Integrations.Providers.Google do
     name = get_primary_value(connection["names"], "displayName")
 
     if name do
+      resource_name = connection["resourceName"]
       %{
         name: name,
         email: get_primary_value(connection["emailAddresses"], "value"),
         phone: get_primary_value(connection["phoneNumbers"], "value"),
         organization: get_primary_value(connection["organizations"], "name"),
         notes: get_first_value(connection["biographies"], "value"),
-        external_id: connection["resourceName"],
+        external_id: resource_name,
         metadata: %{
           photo_url: get_first_value(connection["photos"], "url"),
-          source: "google_contacts"
+          source: "google_contacts",
+          sources: ["google_contacts"],
+          external_ids: %{"google_contacts" => resource_name}
         }
       }
     end
@@ -350,15 +353,18 @@ defmodule Conezia.Integrations.Providers.Google do
     email = attendee["email"]
 
     if email do
+      external_id = "gcal:#{String.downcase(email)}"
       %{
         name: attendee["displayName"] || extract_name_from_email(email),
         email: email,
         phone: nil,
         organization: nil,
         notes: nil,
-        external_id: "gcal:#{String.downcase(email)}",
+        external_id: external_id,
         metadata: %{
           source: "google_calendar",
+          sources: ["google_calendar"],
+          external_ids: %{"google_calendar" => external_id},
           last_meeting: event["start"]["dateTime"] || event["start"]["date"],
           response_status: attendee["responseStatus"]
         }
@@ -370,15 +376,18 @@ defmodule Conezia.Integrations.Providers.Google do
     email = organizer["email"]
 
     if email do
+      external_id = "gcal:#{String.downcase(email)}"
       %{
         name: organizer["displayName"] || extract_name_from_email(email),
         email: email,
         phone: nil,
         organization: nil,
         notes: nil,
-        external_id: "gcal:#{String.downcase(email)}",
+        external_id: external_id,
         metadata: %{
           source: "google_calendar",
+          sources: ["google_calendar"],
+          external_ids: %{"google_calendar" => external_id},
           last_meeting: event["start"]["dateTime"] || event["start"]["date"],
           is_organizer: true
         }
@@ -512,15 +521,18 @@ defmodule Conezia.Integrations.Providers.Google do
     |> Enum.reject(&is_nil/1)
     |> Enum.reject(&filtered_email?/1)
     |> Enum.map(fn {name, email} ->
+      external_id = "gmail:#{String.downcase(email)}"
       %{
         name: name || extract_name_from_email(email),
         email: String.downcase(email),
         phone: nil,
         organization: nil,
         notes: nil,
-        external_id: "gmail:#{String.downcase(email)}",
+        external_id: external_id,
         metadata: %{
           source: "gmail",
+          sources: ["gmail"],
+          external_ids: %{"gmail" => external_id},
           last_email_date: date,
           direction: direction
         }
@@ -569,9 +581,61 @@ defmodule Conezia.Integrations.Providers.Google do
     contacts
     |> Enum.group_by(&dedup_key/1)
     |> Enum.map(fn {_key, group} ->
-      # Pick the contact with the most complete data
-      Enum.max_by(group, &contact_completeness_score/1)
+      # Pick the contact with the most complete data and merge metadata from all
+      merge_contact_group(group)
     end)
+  end
+
+  defp merge_contact_group([single]), do: single
+  defp merge_contact_group(group) do
+    # Sort by completeness score to pick best as primary
+    sorted = Enum.sort_by(group, &contact_completeness_score/1, :desc)
+    primary = hd(sorted)
+    others = tl(sorted)
+
+    # Merge all external_ids and sources from duplicates
+    merged_external_ids =
+      Enum.reduce(group, %{}, fn contact, acc ->
+        contact_ids = contact.metadata[:external_ids] || %{}
+        # Also include the legacy external_id if present
+        contact_ids = if contact.external_id do
+          source = contact.metadata[:source] || "unknown"
+          Map.put_new(contact_ids, source, contact.external_id)
+        else
+          contact_ids
+        end
+        Map.merge(acc, contact_ids)
+      end)
+
+    merged_sources =
+      group
+      |> Enum.flat_map(fn c -> c.metadata[:sources] || [c.metadata[:source]] end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    # Merge metadata, keeping primary's values but adding external_ids/sources
+    merged_metadata =
+      primary.metadata
+      |> Map.put(:external_ids, merged_external_ids)
+      |> Map.put(:sources, merged_sources)
+
+    # Also merge any missing fields from others
+    merged = Enum.reduce(others, primary, fn other, acc ->
+      acc
+      |> maybe_merge_field(:phone, other)
+      |> maybe_merge_field(:organization, other)
+      |> maybe_merge_field(:notes, other)
+    end)
+
+    %{merged | metadata: merged_metadata}
+  end
+
+  defp maybe_merge_field(contact, field, other) do
+    if is_nil(Map.get(contact, field)) && Map.get(other, field) do
+      Map.put(contact, field, Map.get(other, field))
+    else
+      contact
+    end
   end
 
   defp dedup_key(contact) do

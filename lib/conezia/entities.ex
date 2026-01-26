@@ -792,11 +792,29 @@ defmodule Conezia.Entities do
 
   @doc """
   Find an entity by external ID (from external services like Google Contacts).
+  Checks the legacy `external_id` field in metadata.
   """
   def find_by_external_id(user_id, external_id) do
     from(e in Entity,
       where: e.owner_id == ^user_id,
       where: fragment("? ->> 'external_id' = ?", e.metadata, ^external_id)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Find an entity by external ID within the `external_ids` map in metadata.
+  This searches all stored external IDs from different services.
+  """
+  def find_by_any_external_id(user_id, external_id) do
+    # Search in the external_ids JSONB map - check if any value matches
+    from(e in Entity,
+      where: e.owner_id == ^user_id,
+      where: fragment(
+        "EXISTS (SELECT 1 FROM jsonb_each_text(COALESCE(?->'external_ids', '{}')) WHERE value = ?)",
+        e.metadata,
+        ^external_id
+      )
     )
     |> Repo.one()
   end
@@ -1398,10 +1416,40 @@ defmodule Conezia.Entities do
 
       # Update primary's metadata with merged info
       merged_count = length(duplicate_ids)
-      metadata = Map.merge(primary.metadata || %{}, %{
-        "merged_count" => (primary.metadata["merged_count"] || 0) + merged_count,
-        "last_merged_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-      })
+      primary_metadata = primary.metadata || %{}
+
+      # Consolidate all external_ids from duplicates
+      all_external_ids =
+        [primary | duplicates]
+        |> Enum.reduce(%{}, fn entity, acc ->
+          entity_metadata = entity.metadata || %{}
+          # Get external_ids map
+          ext_ids = entity_metadata["external_ids"] || %{}
+          # Also check legacy external_id field
+          ext_ids = case entity_metadata["external_id"] do
+            nil -> ext_ids
+            ext_id ->
+              source = entity_metadata["source"] || "unknown"
+              Map.put_new(ext_ids, source, ext_id)
+          end
+          Map.merge(acc, ext_ids)
+        end)
+
+      # Consolidate all sources from duplicates
+      all_sources =
+        [primary | duplicates]
+        |> Enum.flat_map(fn entity ->
+          entity_metadata = entity.metadata || %{}
+          entity_metadata["sources"] || [entity_metadata["source"]]
+        end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+
+      metadata = primary_metadata
+        |> Map.put("merged_count", (primary_metadata["merged_count"] || 0) + merged_count)
+        |> Map.put("last_merged_at", DateTime.utc_now() |> DateTime.to_iso8601())
+        |> Map.put("external_ids", all_external_ids)
+        |> Map.put("sources", all_sources)
 
       {:ok, updated_primary} = update_entity(primary, %{metadata: metadata})
 

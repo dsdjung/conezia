@@ -262,12 +262,18 @@ defmodule ConeziaWeb.EntityLive.Show do
             <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
               {@entity.name}
             </h1>
-            <div class="mt-1 flex items-center gap-2">
+            <div class="mt-1 flex items-center gap-2 flex-wrap">
               <.badge color={entity_type_color(@entity.type)}>{@entity.type || "person"}</.badge>
               <.badge :if={@relationship} color={relationship_type_color(@relationship.type)}>
                 {relationship_display_label(@relationship)}
               </.badge>
               <.health_badge status={health_status(@entity)} />
+              <%= for source <- get_sync_sources(@entity) do %>
+                <.badge color={source_color(source)} class="text-xs">
+                  <.icon name="hero-cloud-arrow-down" class="h-3 w-3 mr-0.5" />
+                  {source_display_name(source)}
+                </.badge>
+              <% end %>
             </div>
           </div>
         </div>
@@ -860,4 +866,39 @@ defmodule ConeziaWeb.EntityLive.Show do
     |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
     |> Enum.join("; ")
   end
+
+  defp get_sync_sources(entity) do
+    metadata = entity.metadata || %{}
+    sources = metadata["sources"] || []
+
+    # Fallback to legacy source field if sources list is empty
+    if Enum.empty?(sources) do
+      case metadata["source"] do
+        nil -> []
+        source -> [source]
+      end
+    else
+      sources
+    end
+  end
+
+  defp source_display_name("google_contacts"), do: "Google"
+  defp source_display_name("google_calendar"), do: "Calendar"
+  defp source_display_name("gmail"), do: "Gmail"
+  defp source_display_name("linkedin"), do: "LinkedIn"
+  defp source_display_name("facebook"), do: "Facebook"
+  defp source_display_name("icloud"), do: "iCloud"
+  defp source_display_name("outlook"), do: "Outlook"
+  defp source_display_name("csv"), do: "CSV"
+  defp source_display_name("vcard"), do: "vCard"
+  defp source_display_name(other), do: other
+
+  defp source_color("google_contacts"), do: :blue
+  defp source_color("google_calendar"), do: :green
+  defp source_color("gmail"), do: :red
+  defp source_color("linkedin"), do: :blue
+  defp source_color("facebook"), do: :indigo
+  defp source_color("icloud"), do: :gray
+  defp source_color("outlook"), do: :blue
+  defp source_color(_), do: :gray
 end

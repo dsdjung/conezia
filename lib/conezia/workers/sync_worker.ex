@@ -182,7 +182,8 @@ defmodule Conezia.Workers.SyncWorker do
 
   defp find_existing_entity(user_id, contact) do
     # Try to find by external_id first (most reliable for Google Contacts)
-    with nil <- find_by_external_id(user_id, contact.external_id),
+    # Check all external_ids in the contact's metadata
+    with nil <- find_by_any_external_id(user_id, contact),
          nil <- find_by_email(user_id, contact.email),
          nil <- find_by_phone(user_id, contact.phone),
          nil <- find_by_name(user_id, contact.name) do
@@ -190,8 +191,25 @@ defmodule Conezia.Workers.SyncWorker do
     end
   end
 
-  defp find_by_external_id(_user_id, nil), do: nil
-  defp find_by_external_id(user_id, external_id), do: Entities.find_by_external_id(user_id, external_id)
+  defp find_by_any_external_id(user_id, contact) do
+    # Check the primary external_id
+    result = if contact.external_id do
+      Entities.find_by_external_id(user_id, contact.external_id)
+    end
+
+    # Also check all external_ids in metadata
+    result || find_by_metadata_external_ids(user_id, contact.metadata[:external_ids])
+  end
+
+  defp find_by_metadata_external_ids(_user_id, nil), do: nil
+  defp find_by_metadata_external_ids(_user_id, external_ids) when map_size(external_ids) == 0, do: nil
+  defp find_by_metadata_external_ids(user_id, external_ids) do
+    # Try each external_id until we find a match
+    Enum.find_value(external_ids, fn {_source, ext_id} ->
+      Entities.find_by_external_id(user_id, ext_id) ||
+        Entities.find_by_any_external_id(user_id, ext_id)
+    end)
+  end
 
   defp find_by_email(_user_id, nil), do: nil
   defp find_by_email(user_id, email), do: Entities.find_by_email(user_id, email)
@@ -229,27 +247,58 @@ defmodule Conezia.Workers.SyncWorker do
   end
 
   defp merge_entity(existing, contact) do
-    # Update entity with new data if relevant
-    # Entity schema uses 'description' field - prioritize organization, fall back to notes
-    updates =
-      if is_nil(existing.description) do
-        cond do
-          contact.organization -> %{"description" => contact.organization}
-          contact.notes -> %{"description" => contact.notes}
-          true -> %{}
-        end
-      else
-        %{}
-      end
+    # Merge metadata - combine external_ids and sources
+    existing_metadata = existing.metadata || %{}
+    contact_metadata = contact.metadata || %{}
 
-    if map_size(updates) > 0 do
-      Entities.update_entity(existing, updates)
+    # Merge external_ids maps
+    existing_ext_ids = existing_metadata["external_ids"] || %{}
+    contact_ext_ids = contact_metadata[:external_ids] || %{}
+    # Also add legacy external_id if present
+    contact_ext_ids = if contact.external_id && contact_metadata[:source] do
+      Map.put_new(contact_ext_ids, contact_metadata[:source], contact.external_id)
+    else
+      contact_ext_ids
     end
+    merged_ext_ids = Map.merge(existing_ext_ids, stringify_keys(contact_ext_ids))
+
+    # Merge sources lists
+    existing_sources = existing_metadata["sources"] || []
+    contact_sources = contact_metadata[:sources] || [contact_metadata[:source]]
+    merged_sources = (existing_sources ++ contact_sources) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    # Build updates
+    updates = %{}
+
+    # Update description if missing
+    updates = if is_nil(existing.description) do
+      cond do
+        contact.organization -> Map.put(updates, "description", contact.organization)
+        contact.notes -> Map.put(updates, "description", contact.notes)
+        true -> updates
+      end
+    else
+      updates
+    end
+
+    # Always update metadata with merged external_ids and sources
+    merged_metadata =
+      existing_metadata
+      |> Map.put("external_ids", merged_ext_ids)
+      |> Map.put("sources", merged_sources)
+
+    updates = Map.put(updates, "metadata", merged_metadata)
+
+    Entities.update_entity(existing, updates)
 
     # Add any new identifiers
     create_identifiers(existing, contact)
 
     {:ok, :merged}
+  end
+
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
 
   defp create_identifiers(entity, contact) do

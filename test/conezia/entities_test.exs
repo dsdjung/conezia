@@ -154,6 +154,26 @@ defmodule Conezia.EntitiesTest do
       assert %Entity{} = Entities.find_by_external_id(user.id, "google_123")
       assert is_nil(Entities.find_by_external_id(user.id, "google_456"))
     end
+
+    test "find_by_any_external_id/2 finds entity by any external_id in external_ids map" do
+      user = insert(:user)
+      _entity = insert(:entity, owner: user, metadata: %{
+        "external_ids" => %{
+          "google_contacts" => "people/c123",
+          "gmail" => "gmail:john@example.com",
+          "google_calendar" => "gcal:john@example.com"
+        },
+        "sources" => ["google_contacts", "gmail", "google_calendar"]
+      })
+
+      # Should find by any of the external_ids
+      assert %Entity{} = Entities.find_by_any_external_id(user.id, "people/c123")
+      assert %Entity{} = Entities.find_by_any_external_id(user.id, "gmail:john@example.com")
+      assert %Entity{} = Entities.find_by_any_external_id(user.id, "gcal:john@example.com")
+
+      # Should not find non-existent external_id
+      assert is_nil(Entities.find_by_any_external_id(user.id, "people/c999"))
+    end
   end
 
   describe "duplicate detection and merging" do
