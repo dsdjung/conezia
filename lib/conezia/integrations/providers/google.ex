@@ -49,6 +49,7 @@ defmodule Conezia.Integrations.Providers.Google do
     # Combined scopes for all Google services
     [
       "https://www.googleapis.com/auth/contacts.readonly",
+      "https://www.googleapis.com/auth/contacts.other.readonly",
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/gmail.readonly"
     ]
