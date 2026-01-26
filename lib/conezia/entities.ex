@@ -802,12 +802,38 @@ defmodule Conezia.Entities do
   end
 
   @doc """
-  Find an entity by email address.
+  Find an entity by email address (case-insensitive).
   """
   def find_by_email(user_id, email) do
+    normalized_email = String.downcase(email)
+
     from(e in Entity,
       join: i in Identifier, on: i.entity_id == e.id,
-      where: e.owner_id == ^user_id and i.type == "email" and i.value == ^email
+      where: e.owner_id == ^user_id and i.type == "email" and i.value == ^normalized_email
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Find an entity by phone number.
+  """
+  def find_by_phone(user_id, phone) do
+    from(e in Entity,
+      join: i in Identifier, on: i.entity_id == e.id,
+      where: e.owner_id == ^user_id and i.type == "phone" and i.value == ^phone
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Find an entity by exact name match (case-insensitive).
+  Used as a last resort for deduplication when no identifiers match.
+  """
+  def find_by_exact_name(user_id, name) do
+    normalized_name = String.downcase(String.trim(name))
+
+    from(e in Entity,
+      where: e.owner_id == ^user_id and fragment("LOWER(TRIM(?)) = ?", e.name, ^normalized_name)
     )
     |> Repo.one()
   end

@@ -181,23 +181,29 @@ defmodule Conezia.Workers.SyncWorker do
   end
 
   defp find_existing_entity(user_id, contact) do
-    # First try to find by external_id
-    case contact.external_id do
-      nil -> nil
-      external_id ->
-        Entities.find_by_external_id(user_id, external_id)
+    # Try to find by external_id first (most reliable for Google Contacts)
+    with nil <- find_by_external_id(user_id, contact.external_id),
+         nil <- find_by_email(user_id, contact.email),
+         nil <- find_by_phone(user_id, contact.phone),
+         nil <- find_by_name(user_id, contact.name) do
+      nil
     end
-    |> case do
-      nil ->
-        # Try to find by email
-        case contact.email do
-          nil -> nil
-          email -> Entities.find_by_email(user_id, email)
-        end
+  end
 
-      entity ->
-        entity
-    end
+  defp find_by_external_id(_user_id, nil), do: nil
+  defp find_by_external_id(user_id, external_id), do: Entities.find_by_external_id(user_id, external_id)
+
+  defp find_by_email(_user_id, nil), do: nil
+  defp find_by_email(user_id, email), do: Entities.find_by_email(user_id, email)
+
+  defp find_by_phone(_user_id, nil), do: nil
+  defp find_by_phone(user_id, phone), do: Entities.find_by_phone(user_id, phone)
+
+  # Fuzzy name matching as last resort - only for exact matches to avoid false positives
+  defp find_by_name(_user_id, nil), do: nil
+  defp find_by_name(_user_id, ""), do: nil
+  defp find_by_name(user_id, name) do
+    Entities.find_by_exact_name(user_id, name)
   end
 
   defp create_entity(user_id, contact) do

@@ -92,6 +92,70 @@ defmodule Conezia.EntitiesTest do
     end
   end
 
+  describe "entity lookup functions" do
+    test "find_by_email/2 finds entity by email (case-insensitive)" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      insert(:identifier, entity: entity, type: "email", value: "test@example.com")
+
+      # Should find with exact case
+      assert %Entity{} = Entities.find_by_email(user.id, "test@example.com")
+
+      # Should find with different case
+      assert %Entity{} = Entities.find_by_email(user.id, "TEST@EXAMPLE.COM")
+      assert %Entity{} = Entities.find_by_email(user.id, "Test@Example.Com")
+
+      # Should not find non-existent email
+      assert is_nil(Entities.find_by_email(user.id, "other@example.com"))
+    end
+
+    test "find_by_email/2 does not return other users' entities" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      entity = insert(:entity, owner: user1)
+      insert(:identifier, entity: entity, type: "email", value: "test@example.com")
+
+      assert %Entity{} = Entities.find_by_email(user1.id, "test@example.com")
+      assert is_nil(Entities.find_by_email(user2.id, "test@example.com"))
+    end
+
+    test "find_by_phone/2 finds entity by phone number" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      insert(:identifier, entity: entity, type: "phone", value: "+12025551234")
+
+      assert %Entity{} = Entities.find_by_phone(user.id, "+12025551234")
+      assert is_nil(Entities.find_by_phone(user.id, "+12025559999"))
+    end
+
+    test "find_by_exact_name/2 finds entity by exact name (case-insensitive)" do
+      user = insert(:user)
+      insert(:entity, owner: user, name: "John Doe")
+
+      # Should find with exact case
+      assert %Entity{} = Entities.find_by_exact_name(user.id, "John Doe")
+
+      # Should find with different case
+      assert %Entity{} = Entities.find_by_exact_name(user.id, "john doe")
+      assert %Entity{} = Entities.find_by_exact_name(user.id, "JOHN DOE")
+
+      # Should handle extra whitespace
+      assert %Entity{} = Entities.find_by_exact_name(user.id, "  John Doe  ")
+
+      # Should not find partial matches
+      assert is_nil(Entities.find_by_exact_name(user.id, "John"))
+      assert is_nil(Entities.find_by_exact_name(user.id, "Jane Doe"))
+    end
+
+    test "find_by_external_id/2 finds entity by metadata external_id" do
+      user = insert(:user)
+      _entity = insert(:entity, owner: user, metadata: %{"external_id" => "google_123"})
+
+      assert %Entity{} = Entities.find_by_external_id(user.id, "google_123")
+      assert is_nil(Entities.find_by_external_id(user.id, "google_456"))
+    end
+  end
+
   describe "relationships" do
     test "create_relationship/1 creates relationship" do
       user = insert(:user)

@@ -561,25 +561,60 @@ defmodule Conezia.Integrations.Providers.Google do
   end
 
   defp deduplicate_contacts(contacts) do
-    # Deduplicate by email, preferring contacts with more data
+    # Deduplicate contacts using a priority system:
+    # 1. Email (most reliable)
+    # 2. Phone number (for contacts without email)
+    # 3. Normalized name (last resort for contacts without email/phone)
+    # 4. External ID (unique within source, fallback)
     contacts
-    |> Enum.group_by(fn contact ->
-      if contact.email, do: String.downcase(contact.email), else: contact.external_id
-    end)
+    |> Enum.group_by(&dedup_key/1)
     |> Enum.map(fn {_key, group} ->
       # Pick the contact with the most complete data
-      Enum.max_by(group, fn contact ->
-        score = 0
-        score = if contact.name, do: score + 1, else: score
-        score = if contact.email, do: score + 1, else: score
-        score = if contact.phone, do: score + 2, else: score
-        score = if contact.organization, do: score + 1, else: score
-        score = if contact.metadata[:photo_url], do: score + 1, else: score
-        # Prefer google_contacts as the primary source
-        score = if contact.metadata.source == "google_contacts", do: score + 10, else: score
-        score
-      end)
+      Enum.max_by(group, &contact_completeness_score/1)
     end)
+  end
+
+  defp dedup_key(contact) do
+    cond do
+      contact.email ->
+        {:email, String.downcase(contact.email)}
+
+      contact.phone ->
+        {:phone, normalize_phone(contact.phone)}
+
+      contact.name && String.trim(contact.name) != "" ->
+        {:name, normalize_name(contact.name)}
+
+      contact.external_id ->
+        {:external_id, contact.external_id}
+
+      true ->
+        # Unique key for contacts with no identifying info (shouldn't happen often)
+        {:random, :erlang.unique_integer()}
+    end
+  end
+
+  defp normalize_phone(phone) do
+    # Remove all non-digit characters for comparison
+    String.replace(phone, ~r/[^\d]/, "")
+  end
+
+  defp normalize_name(name) do
+    name
+    |> String.downcase()
+    |> String.trim()
+    |> String.replace(~r/\s+/, " ")  # Normalize whitespace
+  end
+
+  defp contact_completeness_score(contact) do
+    score = 0
+    score = if contact.name, do: score + 1, else: score
+    score = if contact.email, do: score + 1, else: score
+    score = if contact.phone, do: score + 2, else: score
+    score = if contact.organization, do: score + 1, else: score
+    score = if contact.metadata[:photo_url], do: score + 1, else: score
+    # Prefer google_contacts as the primary source
+    if contact.metadata.source == "google_contacts", do: score + 10, else: score
   end
 
   defp client_id do
