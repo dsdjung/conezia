@@ -30,11 +30,12 @@ defmodule Conezia.Integrations.Providers.LinkedIn do
 
   @impl true
   def scopes do
-    # Basic scopes available to all apps
-    # r_liteprofile: Basic profile (name, photo)
-    # r_emailaddress: Primary email address
-    # Note: r_network (connections) requires partner access
-    ["r_liteprofile", "r_emailaddress"]
+    # OpenID Connect scopes (required since Aug 2023)
+    # r_liteprofile and r_emailaddress were deprecated
+    # openid: Required for OpenID Connect
+    # profile: Basic profile (name, photo)
+    # email: Primary email address
+    ["openid", "profile", "email"]
   end
 
   @impl true
@@ -173,20 +174,18 @@ defmodule Conezia.Integrations.Providers.LinkedIn do
   end
 
   defp fetch_own_profile(access_token) do
-    # Fetch basic profile using v2 API
-    profile_url = "#{@linkedin_api}/me?projection=(id,firstName,lastName,profilePicture(displayImage~:playableStreams))"
-    email_url = "#{@linkedin_api}/emailAddress?q=members&projection=(elements*(handle~))"
+    # Use OpenID Connect userinfo endpoint (v2/me is deprecated)
+    userinfo_url = "#{@linkedin_api}/userinfo"
 
     headers = [
-      {"authorization", "Bearer #{access_token}"},
-      {"X-Restli-Protocol-Version", "2.0.0"}
+      {"authorization", "Bearer #{access_token}"}
     ]
 
-    with {:ok, %{status: 200, body: profile_body}} <- Req.get(profile_url, headers: headers),
-         {:ok, %{status: 200, body: email_body}} <- Req.get(email_url, headers: headers) do
-      contact = parse_profile(profile_body, email_body)
-      {:ok, contact}
-    else
+    case Req.get(userinfo_url, headers: headers) do
+      {:ok, %{status: 200, body: body}} ->
+        contact = parse_userinfo(body)
+        {:ok, contact}
+
       {:ok, %{status: 401}} ->
         {:error, "Token expired or invalid"}
 
@@ -231,70 +230,31 @@ defmodule Conezia.Integrations.Providers.LinkedIn do
     end
   end
 
-  defp parse_profile(profile_body, email_body) do
-    first_name = get_localized_name(profile_body["firstName"])
-    last_name = get_localized_name(profile_body["lastName"])
-
-    name = [first_name, last_name]
+  defp parse_userinfo(body) do
+    # OpenID Connect userinfo response format
+    # Claims: sub, name, given_name, family_name, picture, email, email_verified, locale
+    name = body["name"] || [body["given_name"], body["family_name"]]
            |> Enum.reject(&is_nil/1)
            |> Enum.join(" ")
 
-    email = get_email_from_response(email_body)
-
     %{
       name: name,
-      email: email,
+      email: body["email"],
       phone: nil,
       organization: nil,
       notes: "Connected via LinkedIn",
-      external_id: "linkedin:#{profile_body["id"]}",
+      external_id: "linkedin:#{body["sub"]}",
       metadata: %{
-        photo_url: get_profile_picture_v2(profile_body),
+        photo_url: body["picture"],
+        email_verified: body["email_verified"],
+        locale: body["locale"],
         source: "linkedin"
       }
     }
   end
 
-  defp get_localized_name(nil), do: nil
-  defp get_localized_name(%{"localized" => localized}) do
-    # Get the first available localization
-    localized
-    |> Map.values()
-    |> List.first()
-  end
-  defp get_localized_name(name) when is_binary(name), do: name
-  defp get_localized_name(_), do: nil
-
-  defp get_email_from_response(nil), do: nil
-  defp get_email_from_response(%{"elements" => elements}) when is_list(elements) do
-    elements
-    |> Enum.find_value(fn element ->
-      get_in(element, ["handle~", "emailAddress"])
-    end)
-  end
-  defp get_email_from_response(_), do: nil
-
   defp get_profile_picture(element) do
     get_in(element, ["profilePicture", "displayImage"])
-  end
-
-  defp get_profile_picture_v2(profile) do
-    # v2 API has a complex structure for profile pictures
-    display_image = get_in(profile, ["profilePicture", "displayImage~", "elements"])
-
-    case display_image do
-      [_ | _] = elements ->
-        # Get the largest image
-        elements
-        |> Enum.max_by(fn el -> get_in(el, ["data", "com.linkedin.digitalmedia.mediaartifact.StillImage", "storageSize", "width"]) || 0 end, fn -> nil end)
-        |> case do
-          nil -> nil
-          el -> get_in(el, ["identifiers", Access.at(0), "identifier"])
-        end
-
-      _ ->
-        nil
-    end
   end
 
   defp client_id do

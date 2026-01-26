@@ -22,10 +22,11 @@ defmodule Conezia.Integrations.Providers.LinkedInTest do
   end
 
   describe "scopes/0" do
-    test "returns required OAuth scopes" do
+    test "returns required OpenID Connect scopes" do
       scopes = LinkedIn.scopes()
-      assert "r_liteprofile" in scopes
-      assert "r_emailaddress" in scopes
+      assert "openid" in scopes
+      assert "profile" in scopes
+      assert "email" in scopes
     end
   end
 
