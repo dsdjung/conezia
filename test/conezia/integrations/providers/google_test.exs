@@ -1,31 +1,32 @@
-defmodule Conezia.Integrations.Providers.GoogleCalendarTest do
+defmodule Conezia.Integrations.Providers.GoogleTest do
   use ExUnit.Case, async: true
 
-  alias Conezia.Integrations.Providers.GoogleCalendar
+  alias Conezia.Integrations.Providers.Google
 
   describe "service metadata" do
-    test "service_name returns 'google_calendar'" do
-      assert GoogleCalendar.service_name() == "google_calendar"
+    test "service_name returns 'google'" do
+      assert Google.service_name() == "google"
     end
 
-    test "display_name returns 'Google Calendar'" do
-      assert GoogleCalendar.display_name() == "Google Calendar"
+    test "display_name returns 'Google'" do
+      assert Google.display_name() == "Google"
     end
 
-    test "icon returns calendar icon class" do
-      assert GoogleCalendar.icon() == "hero-calendar-days"
+    test "icon returns cloud icon class" do
+      assert Google.icon() == "hero-cloud"
     end
 
-    test "scopes includes calendar readonly scope" do
-      scopes = GoogleCalendar.scopes()
+    test "scopes includes all required Google API scopes" do
+      scopes = Google.scopes()
       assert is_list(scopes)
+      assert "https://www.googleapis.com/auth/contacts.readonly" in scopes
       assert "https://www.googleapis.com/auth/calendar.readonly" in scopes
+      assert "https://www.googleapis.com/auth/gmail.readonly" in scopes
     end
   end
 
   describe "authorize_url/2" do
     setup do
-      # Set up test config
       original_config = Application.get_env(:conezia, :google_oauth)
 
       Application.put_env(:conezia, :google_oauth,
@@ -45,7 +46,7 @@ defmodule Conezia.Integrations.Providers.GoogleCalendarTest do
     end
 
     test "generates valid authorization URL" do
-      url = GoogleCalendar.authorize_url("http://localhost/callback", "test_state")
+      url = Google.authorize_url("http://localhost/callback", "test_state")
 
       assert String.starts_with?(url, "https://accounts.google.com/o/oauth2/v2/auth?")
       assert String.contains?(url, "client_id=test_client_id")
@@ -54,12 +55,16 @@ defmodule Conezia.Integrations.Providers.GoogleCalendarTest do
       assert String.contains?(url, "state=test_state")
       assert String.contains?(url, "access_type=offline")
       assert String.contains?(url, "prompt=consent")
+      # Check that all scopes are included
+      assert String.contains?(url, "contacts.readonly")
+      assert String.contains?(url, "calendar.readonly")
+      assert String.contains?(url, "gmail.readonly")
     end
   end
 
   describe "behaviour implementation" do
     test "implements ServiceProvider behaviour" do
-      behaviours = GoogleCalendar.__info__(:attributes)[:behaviour] || []
+      behaviours = Google.__info__(:attributes)[:behaviour] || []
       assert Conezia.Integrations.ServiceProvider in behaviours
     end
   end

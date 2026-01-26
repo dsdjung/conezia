@@ -12,8 +12,8 @@ defmodule Conezia.IntegrationsTest do
       services = Integrations.list_available_services(user.id)
 
       assert is_list(services)
-      # Should have at least the google_contacts provider
-      google = Enum.find(services, &(&1.service == "google_contacts"))
+      # Should have the unified google provider
+      google = Enum.find(services, &(&1.service == "google"))
       assert google != nil
     end
 
@@ -37,7 +37,7 @@ defmodule Conezia.IntegrationsTest do
 
       # No connected services, so status should be :available
       services = Integrations.list_available_services(user.id)
-      google = Enum.find(services, &(&1.service == "google_contacts"))
+      google = Enum.find(services, &(&1.service == "google"))
 
       assert google.account == nil
       assert google.status == :available
@@ -63,7 +63,7 @@ defmodule Conezia.IntegrationsTest do
       redirect_uri = "https://example.com/callback"
       state = "test_state"
 
-      assert {:ok, url} = Integrations.get_authorize_url("google_contacts", redirect_uri, state)
+      assert {:ok, url} = Integrations.get_authorize_url("google", redirect_uri, state)
       assert String.starts_with?(url, "https://accounts.google.com")
       assert String.contains?(url, "client_id=test_client_id")
     end

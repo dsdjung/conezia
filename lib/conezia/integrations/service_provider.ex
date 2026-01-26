@@ -2,7 +2,7 @@ defmodule Conezia.Integrations.ServiceProvider do
   @moduledoc """
   Behaviour defining the contract for external service integrations.
 
-  Each service (Google Contacts, LinkedIn, etc.) implements this behaviour
+  Each service (Google, LinkedIn, etc.) implements this behaviour
   to provide a consistent interface for OAuth authentication and data fetching.
   """
 
@@ -25,10 +25,10 @@ defmodule Conezia.Integrations.ServiceProvider do
 
   @type fetch_result :: {:ok, [contact()], cursor :: String.t() | nil} | {:error, String.t()}
 
-  @doc "Returns the internal service name (e.g., 'google_contacts')"
+  @doc "Returns the internal service name (e.g., 'google')"
   @callback service_name() :: String.t()
 
-  @doc "Returns the human-readable display name (e.g., 'Google Contacts')"
+  @doc "Returns the human-readable display name (e.g., 'Google')"
   @callback display_name() :: String.t()
 
   @doc "Returns the icon class for the service"
@@ -59,9 +59,7 @@ defmodule Conezia.Integrations.ServiceProvider do
   @doc """
   Returns the provider module for a given service name.
   """
-  def get_provider("google_contacts"), do: {:ok, Conezia.Integrations.Providers.GoogleContacts}
-  def get_provider("google_calendar"), do: {:ok, Conezia.Integrations.Providers.GoogleCalendar}
-  def get_provider("gmail"), do: {:ok, Conezia.Integrations.Providers.Gmail}
+  def get_provider("google"), do: {:ok, Conezia.Integrations.Providers.Google}
   def get_provider("linkedin"), do: {:ok, Conezia.Integrations.Providers.LinkedIn}
   def get_provider("icloud"), do: {:ok, Conezia.Integrations.Providers.ICloudContacts}
   def get_provider("facebook"), do: {:ok, Conezia.Integrations.Providers.Facebook}
@@ -73,30 +71,18 @@ defmodule Conezia.Integrations.ServiceProvider do
   def available_providers do
     [
       %{
-        service: "google_contacts",
-        module: Conezia.Integrations.Providers.GoogleContacts,
-        display_name: "Google Contacts",
-        icon: "hero-user-group",
-        status: google_status()
-      },
-      %{
-        service: "google_calendar",
-        module: Conezia.Integrations.Providers.GoogleCalendar,
-        display_name: "Google Calendar",
-        icon: "hero-calendar-days",
-        status: google_status()
-      },
-      %{
-        service: "gmail",
-        module: Conezia.Integrations.Providers.Gmail,
-        display_name: "Gmail",
-        icon: "hero-envelope",
+        service: "google",
+        module: Conezia.Integrations.Providers.Google,
+        display_name: "Google",
+        description: "Import contacts from Google Contacts, Calendar, and Gmail",
+        icon: "hero-cloud",
         status: google_status()
       },
       %{
         service: "linkedin",
         module: Conezia.Integrations.Providers.LinkedIn,
         display_name: "LinkedIn",
+        description: "Import your LinkedIn profile",
         icon: "hero-briefcase",
         status: linkedin_status()
       },
@@ -104,6 +90,7 @@ defmodule Conezia.Integrations.ServiceProvider do
         service: "icloud",
         module: Conezia.Integrations.Providers.ICloudContacts,
         display_name: "iCloud Contacts",
+        description: "Import contacts from iCloud",
         icon: "hero-cloud",
         status: :available
       },
@@ -111,6 +98,7 @@ defmodule Conezia.Integrations.ServiceProvider do
         service: "facebook",
         module: Conezia.Integrations.Providers.Facebook,
         display_name: "Facebook",
+        description: "Import friends from Facebook",
         icon: "hero-user-group",
         status: facebook_status()
       },
@@ -118,6 +106,7 @@ defmodule Conezia.Integrations.ServiceProvider do
         service: "outlook",
         module: nil,
         display_name: "Outlook",
+        description: "Import contacts from Outlook",
         icon: "hero-envelope",
         status: :coming_soon
       }

@@ -4,14 +4,9 @@ defmodule Conezia.Integrations.ServiceProviderTest do
   alias Conezia.Integrations.ServiceProvider
 
   describe "get_provider/1" do
-    test "returns Google Contacts provider for 'google_contacts'" do
-      assert {:ok, provider} = ServiceProvider.get_provider("google_contacts")
-      assert provider == Conezia.Integrations.Providers.GoogleContacts
-    end
-
-    test "returns Google Calendar provider for 'google_calendar'" do
-      assert {:ok, provider} = ServiceProvider.get_provider("google_calendar")
-      assert provider == Conezia.Integrations.Providers.GoogleCalendar
+    test "returns Google provider for 'google'" do
+      assert {:ok, provider} = ServiceProvider.get_provider("google")
+      assert provider == Conezia.Integrations.Providers.Google
     end
 
     test "returns LinkedIn provider for 'linkedin'" do
@@ -27,11 +22,6 @@ defmodule Conezia.Integrations.ServiceProviderTest do
     test "returns Facebook provider for 'facebook'" do
       assert {:ok, provider} = ServiceProvider.get_provider("facebook")
       assert provider == Conezia.Integrations.Providers.Facebook
-    end
-
-    test "returns Gmail provider for 'gmail'" do
-      assert {:ok, provider} = ServiceProvider.get_provider("gmail")
-      assert provider == Conezia.Integrations.Providers.Gmail
     end
 
     test "returns error for unknown service" do
@@ -59,13 +49,21 @@ defmodule Conezia.Integrations.ServiceProviderTest do
       providers = ServiceProvider.available_providers()
       services = Enum.map(providers, & &1.service)
 
-      assert "google_contacts" in services
-      assert "google_calendar" in services
-      assert "gmail" in services
+      assert "google" in services
       assert "linkedin" in services
       assert "icloud" in services
       assert "facebook" in services
       assert "outlook" in services
+    end
+
+    test "google provider includes description mentioning all sources" do
+      providers = ServiceProvider.available_providers()
+      google = Enum.find(providers, &(&1.service == "google"))
+
+      assert google != nil
+      assert google.description =~ "Contacts"
+      assert google.description =~ "Calendar"
+      assert google.description =~ "Gmail"
     end
 
     test "icloud is always available (uses app-specific passwords)" do
