@@ -42,6 +42,8 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:available_entities, [])
           |> assign(:merging, false)
           |> assign(:merge_candidates, [])
+          |> assign(:merge_search, "")
+          |> assign(:filtered_merge_candidates, [])
 
         {:ok, socket}
     end
@@ -231,14 +233,41 @@ defmodule ConeziaWeb.EntityLive.Show do
     {:noreply,
      socket
      |> assign(:merging, true)
-     |> assign(:merge_candidates, merge_candidates)}
+     |> assign(:merge_candidates, merge_candidates)
+     |> assign(:merge_search, "")
+     |> assign(:filtered_merge_candidates, merge_candidates)}
   end
 
   def handle_event("cancel_merge", _params, socket) do
     {:noreply,
      socket
      |> assign(:merging, false)
-     |> assign(:merge_candidates, [])}
+     |> assign(:merge_candidates, [])
+     |> assign(:merge_search, "")
+     |> assign(:filtered_merge_candidates, [])}
+  end
+
+  def handle_event("merge_search", %{"value" => search_term}, socket) do
+    candidates = socket.assigns.merge_candidates
+    search_term = String.trim(search_term)
+
+    filtered =
+      if search_term == "" do
+        candidates
+      else
+        search_lower = String.downcase(search_term)
+
+        Enum.filter(candidates, fn candidate ->
+          name_match = candidate.name && String.contains?(String.downcase(candidate.name), search_lower)
+          desc_match = candidate.description && String.contains?(String.downcase(candidate.description), search_lower)
+          name_match || desc_match
+        end)
+      end
+
+    {:noreply,
+     socket
+     |> assign(:merge_search, search_term)
+     |> assign(:filtered_merge_candidates, filtered)}
   end
 
   def handle_event("merge_into", %{"target_id" => target_id}, socket) do
@@ -879,24 +908,50 @@ defmodule ConeziaWeb.EntityLive.Show do
             <p class="text-gray-500">No other connections of this type to merge with.</p>
           </div>
 
-          <div :if={@merge_candidates != []} class="max-h-96 overflow-y-auto">
-            <ul role="list" class="divide-y divide-gray-200">
-              <li :for={candidate <- @merge_candidates} class="py-3">
-                <button
-                  phx-click="merge_into"
-                  phx-value-target_id={candidate.id}
-                  data-confirm={"Merge \"#{@entity.name}\" into \"#{candidate.name}\"? This cannot be undone."}
-                  class="w-full flex items-center gap-3 p-2 rounded-md hover:bg-gray-50 text-left"
-                >
-                  <.avatar name={candidate.name} size={:sm} />
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-gray-900">{candidate.name}</p>
-                    <p class="text-xs text-gray-500 truncate">{candidate.description || "No description"}</p>
-                  </div>
-                  <.icon name="hero-arrow-right" class="h-5 w-5 text-gray-400" />
-                </button>
-              </li>
-            </ul>
+          <div :if={@merge_candidates != []}>
+            <!-- Search input -->
+            <div class="relative mb-3">
+              <.icon name="hero-magnifying-glass" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search connections..."
+                value={@merge_search}
+                phx-keyup="merge_search"
+                phx-debounce="150"
+                class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+
+            <!-- Results count -->
+            <p :if={@merge_search != ""} class="text-xs text-gray-500 mb-2">
+              {length(@filtered_merge_candidates)} of {length(@merge_candidates)} connections
+            </p>
+
+            <!-- No results message -->
+            <div :if={@filtered_merge_candidates == [] && @merge_search != ""} class="py-6 text-center">
+              <p class="text-gray-500 text-sm">No connections match "{@merge_search}"</p>
+            </div>
+
+            <!-- Candidates list -->
+            <div :if={@filtered_merge_candidates != []} class="max-h-72 overflow-y-auto border border-gray-200 rounded-md">
+              <ul role="list" class="divide-y divide-gray-200">
+                <li :for={candidate <- @filtered_merge_candidates} class="py-3 px-2">
+                  <button
+                    phx-click="merge_into"
+                    phx-value-target_id={candidate.id}
+                    data-confirm={"Merge \"#{@entity.name}\" into \"#{candidate.name}\"? This cannot be undone."}
+                    class="w-full flex items-center gap-3 p-2 rounded-md hover:bg-gray-50 text-left"
+                  >
+                    <.avatar name={candidate.name} size={:sm} />
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-medium text-gray-900">{candidate.name}</p>
+                      <p class="text-xs text-gray-500 truncate">{candidate.description || "No description"}</p>
+                    </div>
+                    <.icon name="hero-arrow-right" class="h-5 w-5 text-gray-400" />
+                  </button>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div class="flex justify-end pt-4 border-t">
