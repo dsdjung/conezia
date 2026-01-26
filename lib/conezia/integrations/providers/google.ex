@@ -184,13 +184,15 @@ defmodule Conezia.Integrations.Providers.Google do
   # Google Contacts (People API)
   # ============================================================================
 
-  defp fetch_from_contacts(access_token, opts) do
-    page_size = Keyword.get(opts, :page_size, 100)
-    page_token = Keyword.get(opts, :page_token)
+  defp fetch_from_contacts(access_token, _opts) do
+    # Fetch all contacts with pagination
+    fetch_all_contacts_pages(access_token, nil, [])
+  end
 
+  defp fetch_all_contacts_pages(access_token, page_token, accumulated) do
     params = %{
       personFields: "names,emailAddresses,phoneNumbers,organizations,biographies,photos",
-      pageSize: page_size
+      pageSize: 1000
     }
 
     params = if page_token, do: Map.put(params, :pageToken, page_token), else: params
@@ -201,7 +203,15 @@ defmodule Conezia.Integrations.Providers.Google do
     case Req.get(url, headers: headers) do
       {:ok, %{status: 200, body: body}} ->
         contacts = parse_people_connections(body["connections"] || [])
-        {:ok, contacts}
+        all_contacts = accumulated ++ contacts
+
+        case body["nextPageToken"] do
+          nil ->
+            {:ok, all_contacts}
+
+          next_token ->
+            fetch_all_contacts_pages(access_token, next_token, all_contacts)
+        end
 
       {:ok, %{status: 401}} ->
         {:error, "Token expired or invalid"}
