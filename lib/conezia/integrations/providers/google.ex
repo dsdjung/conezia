@@ -128,11 +128,39 @@ defmodule Conezia.Integrations.Providers.Google do
 
   @impl true
   def fetch_contacts(access_token, opts \\ []) do
-    # Fetch from all three sources and merge
-    with {:ok, contacts_data} <- fetch_from_contacts(access_token, opts),
-         {:ok, calendar_data} <- fetch_from_calendar(access_token),
-         {:ok, gmail_data} <- fetch_from_gmail(access_token) do
-      # Merge and deduplicate all contacts
+    # Fetch from all three sources - each source fails gracefully
+    # so if one API fails, we still get contacts from the others
+    contacts_result = fetch_from_contacts(access_token, opts)
+    calendar_result = fetch_from_calendar(access_token)
+    gmail_result = fetch_from_gmail(access_token)
+
+    # Extract successful results, defaulting to empty list on failure
+    contacts_data = case contacts_result do
+      {:ok, data} -> data
+      {:error, _} -> []
+    end
+
+    calendar_data = case calendar_result do
+      {:ok, data} -> data
+      {:error, _} -> []
+    end
+
+    gmail_data = case gmail_result do
+      {:ok, data} -> data
+      {:error, _} -> []
+    end
+
+    # If all three failed, return an error
+    all_failed? = match?({:error, _}, contacts_result) and
+                  match?({:error, _}, calendar_result) and
+                  match?({:error, _}, gmail_result)
+
+    if all_failed? do
+      # Return the first error message
+      {:error, _reason} = contacts_result
+      contacts_result
+    else
+      # Merge and deduplicate all contacts from successful sources
       all_contacts =
         (contacts_data ++ calendar_data ++ gmail_data)
         |> deduplicate_contacts()
