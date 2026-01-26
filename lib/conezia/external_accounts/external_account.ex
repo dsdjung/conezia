@@ -8,7 +8,7 @@ defmodule Conezia.ExternalAccounts.ExternalAccount do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @services ~w(google_contacts google_calendar icloud outlook linkedin facebook)
+  @services ~w(google_contacts google_calendar gmail icloud outlook linkedin facebook)
   @statuses ~w(connected disconnected error pending_reauth)
 
   schema "external_accounts" do

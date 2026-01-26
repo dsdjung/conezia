@@ -61,6 +61,7 @@ defmodule Conezia.Integrations.ServiceProvider do
   """
   def get_provider("google_contacts"), do: {:ok, Conezia.Integrations.Providers.GoogleContacts}
   def get_provider("google_calendar"), do: {:ok, Conezia.Integrations.Providers.GoogleCalendar}
+  def get_provider("gmail"), do: {:ok, Conezia.Integrations.Providers.Gmail}
   def get_provider("linkedin"), do: {:ok, Conezia.Integrations.Providers.LinkedIn}
   def get_provider("icloud"), do: {:ok, Conezia.Integrations.Providers.ICloudContacts}
   def get_provider("facebook"), do: {:ok, Conezia.Integrations.Providers.Facebook}
@@ -83,6 +84,13 @@ defmodule Conezia.Integrations.ServiceProvider do
         module: Conezia.Integrations.Providers.GoogleCalendar,
         display_name: "Google Calendar",
         icon: "hero-calendar-days",
+        status: google_status()
+      },
+      %{
+        service: "gmail",
+        module: Conezia.Integrations.Providers.Gmail,
+        display_name: "Gmail",
+        icon: "hero-envelope",
         status: google_status()
       },
       %{

@@ -29,6 +29,11 @@ defmodule Conezia.Integrations.ServiceProviderTest do
       assert provider == Conezia.Integrations.Providers.Facebook
     end
 
+    test "returns Gmail provider for 'gmail'" do
+      assert {:ok, provider} = ServiceProvider.get_provider("gmail")
+      assert provider == Conezia.Integrations.Providers.Gmail
+    end
+
     test "returns error for unknown service" do
       assert {:error, "Unknown service: unknown_service"} = ServiceProvider.get_provider("unknown_service")
     end
@@ -56,6 +61,7 @@ defmodule Conezia.Integrations.ServiceProviderTest do
 
       assert "google_contacts" in services
       assert "google_calendar" in services
+      assert "gmail" in services
       assert "linkedin" in services
       assert "icloud" in services
       assert "facebook" in services
