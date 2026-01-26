@@ -44,6 +44,8 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:merge_candidates, [])
           |> assign(:merge_search, "")
           |> assign(:filtered_merge_candidates, [])
+          |> assign(:adding_identifier, nil)
+          |> assign(:editing_identifier, nil)
 
         {:ok, socket}
     end
@@ -296,6 +298,115 @@ defmodule ConeziaWeb.EntityLive.Show do
     end
   end
 
+  # Identifier management events
+  def handle_event("add_identifier", %{"type" => type}, socket) do
+    {:noreply, assign(socket, :adding_identifier, type)}
+  end
+
+  def handle_event("cancel_add_identifier", _params, socket) do
+    {:noreply, assign(socket, :adding_identifier, nil)}
+  end
+
+  def handle_event("save_identifier", %{"identifier" => params}, socket) do
+    entity = socket.assigns.entity
+    type = socket.assigns.adding_identifier
+
+    # Check if this is the first identifier of this type (make it primary)
+    has_type = Entities.has_identifier_type?(entity.id, type)
+
+    attrs = %{
+      "entity_id" => entity.id,
+      "type" => type,
+      "value" => params["value"],
+      "label" => params["label"],
+      "is_primary" => !has_type
+    }
+
+    case Entities.create_identifier(attrs) do
+      {:ok, _identifier} ->
+        identifiers = Entities.list_identifiers_for_entity(entity.id)
+
+        {:noreply,
+         socket
+         |> assign(:identifiers, identifiers)
+         |> assign(:adding_identifier, nil)
+         |> put_flash(:info, "#{String.capitalize(type)} added successfully")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to add #{type}")}
+    end
+  end
+
+  def handle_event("edit_identifier", %{"id" => id}, socket) do
+    identifier = Entities.get_identifier(id)
+    {:noreply, assign(socket, :editing_identifier, identifier)}
+  end
+
+  def handle_event("cancel_edit_identifier", _params, socket) do
+    {:noreply, assign(socket, :editing_identifier, nil)}
+  end
+
+  def handle_event("update_identifier", %{"identifier" => params}, socket) do
+    identifier = socket.assigns.editing_identifier
+
+    case Entities.update_identifier(identifier, params) do
+      {:ok, _updated} ->
+        identifiers = Entities.list_identifiers_for_entity(socket.assigns.entity.id)
+
+        {:noreply,
+         socket
+         |> assign(:identifiers, identifiers)
+         |> assign(:editing_identifier, nil)
+         |> put_flash(:info, "Updated successfully")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to update")}
+    end
+  end
+
+  def handle_event("delete_identifier", %{"id" => id}, socket) do
+    identifier = Entities.get_identifier(id)
+
+    case Entities.delete_identifier(identifier) do
+      {:ok, _} ->
+        identifiers = Entities.list_identifiers_for_entity(socket.assigns.entity.id)
+
+        {:noreply,
+         socket
+         |> assign(:identifiers, identifiers)
+         |> put_flash(:info, "Removed successfully")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to remove")}
+    end
+  end
+
+  def handle_event("set_primary_identifier", %{"id" => id}, socket) do
+    identifier = Entities.get_identifier(id)
+    entity_id = socket.assigns.entity.id
+
+    # First, unset any existing primary identifier of this type
+    socket.assigns.identifiers
+    |> Enum.filter(&(&1.type == identifier.type && &1.is_primary))
+    |> Enum.each(fn existing_primary ->
+      Entities.update_identifier(existing_primary, %{"is_primary" => false})
+    end)
+
+    # Set this one as primary
+    case Entities.update_identifier(identifier, %{"is_primary" => true}) do
+      {:ok, _} ->
+        identifiers = Entities.list_identifiers_for_entity(entity_id)
+
+        {:noreply,
+         socket
+         |> assign(:identifiers, identifiers)
+         |> put_flash(:info, "Set as primary")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to set as primary")}
+    end
+  end
+
   @impl true
   def handle_info({ConeziaWeb.EntityLive.FormComponent, {:saved, entity}}, socket) do
     user = socket.assigns.current_user
@@ -403,58 +514,252 @@ defmodule ConeziaWeb.EntityLive.Show do
           </.card>
 
           <!-- Contact Information (Emails, Phones) -->
-          <.card :if={@identifiers != []}>
-            <:header>Contact Information</:header>
+          <.card>
+            <:header>
+              <div class="flex items-center justify-between">
+                <span>Contact Information</span>
+                <div class="flex gap-2">
+                  <button
+                    phx-click="add_identifier"
+                    phx-value-type="email"
+                    class="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                  >
+                    + Email
+                  </button>
+                  <button
+                    phx-click="add_identifier"
+                    phx-value-type="phone"
+                    class="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                  >
+                    + Phone
+                  </button>
+                </div>
+              </div>
+            </:header>
             <div class="space-y-4">
+              <!-- Add identifier form -->
+              <div :if={@adding_identifier} class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                <form phx-submit="save_identifier" class="space-y-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                      {String.capitalize(@adding_identifier)}
+                    </label>
+                    <input
+                      type={if @adding_identifier == "email", do: "email", else: "text"}
+                      name="identifier[value]"
+                      required
+                      placeholder={identifier_placeholder(@adding_identifier)}
+                      class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Label (optional)</label>
+                    <input
+                      type="text"
+                      name="identifier[label]"
+                      placeholder="e.g., Work, Personal, Home"
+                      class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div class="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      phx-click="cancel_add_identifier"
+                      class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Edit identifier form -->
+              <div :if={@editing_identifier} class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                <form phx-submit="update_identifier" class="space-y-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                      {String.capitalize(@editing_identifier.type)}
+                    </label>
+                    <input
+                      type={if @editing_identifier.type == "email", do: "email", else: "text"}
+                      name="identifier[value]"
+                      value={@editing_identifier.value}
+                      required
+                      class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Label (optional)</label>
+                    <input
+                      type="text"
+                      name="identifier[label]"
+                      value={@editing_identifier.label}
+                      placeholder="e.g., Work, Personal, Home"
+                      class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div class="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      phx-click="cancel_edit_identifier"
+                      class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </form>
+              </div>
+
               <!-- Emails -->
               <% emails = Enum.filter(@identifiers, & &1.type == "email") %>
-              <div :if={emails != []}>
+              <div :if={emails != [] && !@editing_identifier}>
                 <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Email</h4>
                 <ul class="space-y-2">
-                  <li :for={email <- emails} class="flex items-center gap-2">
-                    <.icon name="hero-envelope" class="h-4 w-4 text-gray-400" />
-                    <a
-                      href={"mailto:#{email.value}"}
-                      class="text-sm text-indigo-600 hover:text-indigo-500"
-                    >
-                      {email.value}
-                    </a>
-                    <.badge :if={email.is_primary} color={:green} class="text-xs">Primary</.badge>
+                  <li :for={email <- emails} class="group flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <.icon name="hero-envelope" class="h-4 w-4 text-gray-400" />
+                      <a
+                        href={"mailto:#{email.value}"}
+                        class="text-sm text-indigo-600 hover:text-indigo-500"
+                      >
+                        {email.value}
+                      </a>
+                      <span :if={email.label} class="text-xs text-gray-500">({email.label})</span>
+                      <.badge :if={email.is_primary} color={:green} class="text-xs">Primary</.badge>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        :if={!email.is_primary}
+                        phx-click="set_primary_identifier"
+                        phx-value-id={email.id}
+                        title="Set as primary"
+                        class="p-1 text-gray-400 hover:text-indigo-600"
+                      >
+                        <.icon name="hero-star" class="h-4 w-4" />
+                      </button>
+                      <button
+                        phx-click="edit_identifier"
+                        phx-value-id={email.id}
+                        title="Edit"
+                        class="p-1 text-gray-400 hover:text-indigo-600"
+                      >
+                        <.icon name="hero-pencil" class="h-4 w-4" />
+                      </button>
+                      <button
+                        phx-click="delete_identifier"
+                        phx-value-id={email.id}
+                        data-confirm="Remove this email address?"
+                        title="Remove"
+                        class="p-1 text-gray-400 hover:text-red-600"
+                      >
+                        <.icon name="hero-trash" class="h-4 w-4" />
+                      </button>
+                    </div>
                   </li>
                 </ul>
               </div>
 
               <!-- Phones -->
               <% phones = Enum.filter(@identifiers, & &1.type == "phone") %>
-              <div :if={phones != []}>
+              <div :if={phones != [] && !@editing_identifier}>
                 <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Phone</h4>
                 <ul class="space-y-2">
-                  <li :for={phone <- phones} class="flex items-center gap-2">
-                    <.icon name="hero-phone" class="h-4 w-4 text-gray-400" />
-                    <a
-                      href={"tel:#{phone.value}"}
-                      class="text-sm text-indigo-600 hover:text-indigo-500"
-                    >
-                      {phone.value}
-                    </a>
-                    <.badge :if={phone.is_primary} color={:green} class="text-xs">Primary</.badge>
+                  <li :for={phone <- phones} class="group flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <.icon name="hero-phone" class="h-4 w-4 text-gray-400" />
+                      <a
+                        href={"tel:#{phone.value}"}
+                        class="text-sm text-indigo-600 hover:text-indigo-500"
+                      >
+                        {phone.value}
+                      </a>
+                      <span :if={phone.label} class="text-xs text-gray-500">({phone.label})</span>
+                      <.badge :if={phone.is_primary} color={:green} class="text-xs">Primary</.badge>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        :if={!phone.is_primary}
+                        phx-click="set_primary_identifier"
+                        phx-value-id={phone.id}
+                        title="Set as primary"
+                        class="p-1 text-gray-400 hover:text-indigo-600"
+                      >
+                        <.icon name="hero-star" class="h-4 w-4" />
+                      </button>
+                      <button
+                        phx-click="edit_identifier"
+                        phx-value-id={phone.id}
+                        title="Edit"
+                        class="p-1 text-gray-400 hover:text-indigo-600"
+                      >
+                        <.icon name="hero-pencil" class="h-4 w-4" />
+                      </button>
+                      <button
+                        phx-click="delete_identifier"
+                        phx-value-id={phone.id}
+                        data-confirm="Remove this phone number?"
+                        title="Remove"
+                        class="p-1 text-gray-400 hover:text-red-600"
+                      >
+                        <.icon name="hero-trash" class="h-4 w-4" />
+                      </button>
+                    </div>
                   </li>
                 </ul>
               </div>
 
               <!-- Other identifiers -->
               <% others = Enum.reject(@identifiers, & &1.type in ["email", "phone"]) %>
-              <div :if={others != []}>
+              <div :if={others != [] && !@editing_identifier}>
                 <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Other</h4>
                 <ul class="space-y-2">
-                  <li :for={identifier <- others} class="flex items-center gap-2">
-                    <.icon name="hero-identification" class="h-4 w-4 text-gray-400" />
-                    <span class="text-xs text-gray-500">{identifier.type}:</span>
-                    <span class="text-sm text-gray-900">{identifier.value}</span>
-                    <.badge :if={identifier.is_primary} color={:green} class="text-xs">Primary</.badge>
+                  <li :for={identifier <- others} class="group flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <.icon name="hero-identification" class="h-4 w-4 text-gray-400" />
+                      <span class="text-xs text-gray-500">{identifier.type}:</span>
+                      <span class="text-sm text-gray-900">{identifier.value}</span>
+                      <span :if={identifier.label} class="text-xs text-gray-500">({identifier.label})</span>
+                      <.badge :if={identifier.is_primary} color={:green} class="text-xs">Primary</.badge>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        phx-click="edit_identifier"
+                        phx-value-id={identifier.id}
+                        title="Edit"
+                        class="p-1 text-gray-400 hover:text-indigo-600"
+                      >
+                        <.icon name="hero-pencil" class="h-4 w-4" />
+                      </button>
+                      <button
+                        phx-click="delete_identifier"
+                        phx-value-id={identifier.id}
+                        data-confirm="Remove this identifier?"
+                        title="Remove"
+                        class="p-1 text-gray-400 hover:text-red-600"
+                      >
+                        <.icon name="hero-trash" class="h-4 w-4" />
+                      </button>
+                    </div>
                   </li>
                 </ul>
               </div>
+
+              <!-- Empty state -->
+              <p :if={@identifiers == [] && !@adding_identifier} class="text-sm text-gray-500 text-center py-4">
+                No contact information yet. Add an email or phone number above.
+              </p>
             </div>
           </.card>
 
@@ -1123,4 +1428,8 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp source_color("icloud"), do: :gray
   defp source_color("outlook"), do: :blue
   defp source_color(_), do: :gray
+
+  defp identifier_placeholder("email"), do: "name@example.com"
+  defp identifier_placeholder("phone"), do: "+1 (555) 123-4567"
+  defp identifier_placeholder(_), do: "Value"
 end
