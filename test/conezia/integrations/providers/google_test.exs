@@ -68,4 +68,94 @@ defmodule Conezia.Integrations.Providers.GoogleTest do
       assert Conezia.Integrations.ServiceProvider in behaviours
     end
   end
+
+  describe "contact deduplication" do
+    # Note: These tests verify the internal deduplication logic through the module's
+    # private functions. We test the behavior indirectly through fetch_contacts
+    # or expose the function for testing.
+
+    test "contact_completeness_score prefers longer names" do
+      # "David Oh" should score higher than "Oh" for name completeness
+      david_oh = %{
+        name: "David Oh",
+        email: "david@example.com",
+        phone: nil,
+        organization: nil,
+        metadata: %{source: "gmail"}
+      }
+
+      oh = %{
+        name: "Oh",
+        email: "david@example.com",
+        phone: nil,
+        organization: nil,
+        metadata: %{source: "google_contacts"}
+      }
+
+      # Call the private function through send
+      david_score = call_private(:contact_completeness_score, [david_oh])
+      oh_score = call_private(:contact_completeness_score, [oh])
+
+      assert david_score > oh_score, "David Oh (#{david_score}) should score higher than Oh (#{oh_score})"
+    end
+
+    test "contact_completeness_score prefers multi-part names" do
+      full_name = %{
+        name: "John Smith",
+        email: "john@example.com",
+        phone: nil,
+        organization: nil,
+        metadata: %{source: "gmail"}
+      }
+
+      single_name = %{
+        name: "John",
+        email: "john@example.com",
+        phone: nil,
+        organization: nil,
+        metadata: %{source: "gmail"}
+      }
+
+      full_score = call_private(:contact_completeness_score, [full_name])
+      single_score = call_private(:contact_completeness_score, [single_name])
+
+      assert full_score > single_score
+    end
+
+    test "find_best_name returns longest/most complete name" do
+      contacts = [
+        %{name: "Oh"},
+        %{name: "David Oh"},
+        %{name: "D Oh"}
+      ]
+
+      best = call_private(:find_best_name, [contacts])
+      assert best == "David Oh"
+    end
+
+    test "find_best_name returns nil for empty list" do
+      assert call_private(:find_best_name, [[]]) == nil
+    end
+
+    test "find_best_name prefers more name parts over length" do
+      contacts = [
+        %{name: "Jonathan"},        # 1 part, 8 chars
+        %{name: "Jo Kim"}           # 2 parts, 6 chars
+      ]
+
+      best = call_private(:find_best_name, [contacts])
+      assert best == "Jo Kim"
+    end
+  end
+
+  # Helper to call private functions for testing
+  defp call_private(func, args) do
+    # Use :erlang.apply with the module and function name as atom
+    apply(Google, func, args)
+  rescue
+    UndefinedFunctionError ->
+      # If the function is not exported, we can use Module.concat and Code.eval_string
+      # but that's hacky. Instead, let's test through the public interface.
+      raise "Cannot test private function #{func} - consider making it public for testing"
+  end
 end

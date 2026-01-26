@@ -627,7 +627,29 @@ defmodule Conezia.Integrations.Providers.Google do
       |> maybe_merge_field(:notes, other)
     end)
 
+    # Always prefer the longest/most complete name from the group
+    best_name = find_best_name(group)
+    merged = if best_name && best_name != merged.name do
+      %{merged | name: best_name}
+    else
+      merged
+    end
+
     %{merged | metadata: merged_metadata}
+  end
+
+  @doc false
+  # Made public for testing - finds the most complete name from a group
+  def find_best_name(contacts) do
+    contacts
+    |> Enum.map(& &1.name)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reject(&(String.trim(&1) == ""))
+    |> Enum.max_by(fn name ->
+      parts = String.split(name)
+      # Prefer names with more parts (first + last) and longer overall length
+      {length(parts), String.length(name)}
+    end, fn -> nil end)
   end
 
   defp maybe_merge_field(contact, field, other) do
@@ -670,15 +692,31 @@ defmodule Conezia.Integrations.Providers.Google do
     |> String.replace(~r/\s+/, " ")  # Normalize whitespace
   end
 
-  defp contact_completeness_score(contact) do
+  @doc false
+  # Made public for testing - calculates how "complete" a contact is for deduplication
+  def contact_completeness_score(contact) do
     score = 0
-    score = if contact.name, do: score + 1, else: score
+
+    # Name completeness - prefer longer, more complete names
+    # This is important: "David Oh" should beat "Oh" when merging
+    score = case contact.name do
+      nil -> score
+      name ->
+        name_parts = name |> String.trim() |> String.split()
+        # Base point for having a name
+        score = score + 1
+        # Bonus for having multiple name parts (first + last name)
+        score = score + min(length(name_parts) - 1, 2) * 5
+        # Small bonus for name length (capped to avoid very long names dominating)
+        score + min(String.length(name), 30)
+    end
+
     score = if contact.email, do: score + 1, else: score
     score = if contact.phone, do: score + 2, else: score
     score = if contact.organization, do: score + 1, else: score
     score = if contact.metadata[:photo_url], do: score + 1, else: score
-    # Prefer google_contacts as the primary source
-    if contact.metadata.source == "google_contacts", do: score + 10, else: score
+    # Prefer google_contacts as the primary source (but not enough to override name completeness)
+    if contact.metadata.source == "google_contacts", do: score + 3, else: score
   end
 
   defp client_id do
