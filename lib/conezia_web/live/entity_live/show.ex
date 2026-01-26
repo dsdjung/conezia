@@ -9,6 +9,7 @@ defmodule ConeziaWeb.EntityLive.Show do
   alias Conezia.Interactions
   alias Conezia.Reminders
   alias Conezia.Communications
+  alias Conezia.Integrations.Gmail
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -30,6 +31,9 @@ defmodule ConeziaWeb.EntityLive.Show do
         last_communication = Communications.get_last_communication_for_entity(entity.id)
         last_event = Interactions.get_last_event_for_entity(entity.id, user.id)
 
+        # Fetch last Gmail email on-demand if we have email identifiers
+        last_gmail_email = fetch_last_gmail_email(user.id, active_identifiers)
+
         socket =
           socket
           |> assign(:page_title, entity.name)
@@ -44,6 +48,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:reminders, list_reminders(entity.id, user.id))
           |> assign(:last_communication, last_communication)
           |> assign(:last_event, last_event)
+          |> assign(:last_gmail_email, last_gmail_email)
           |> assign(:editing_custom_field, nil)
           |> assign(:new_custom_field, nil)
           |> assign(:adding_entity_relationship, false)
@@ -1340,12 +1345,29 @@ defmodule ConeziaWeb.EntityLive.Show do
 
         <!-- Sidebar with activity and reminders -->
         <div class="space-y-6">
-          <!-- Activity Summary (Last Communication & Event) -->
-          <.card :if={@last_communication || @last_event}>
+          <!-- Activity Summary (Last Communication, Gmail Email & Event) -->
+          <.card :if={@last_communication || @last_event || @last_gmail_email}>
             <:header>Activity</:header>
             <div class="space-y-4">
-              <!-- Last Communication -->
-              <div :if={@last_communication} class="flex items-start gap-3">
+              <!-- Last Gmail Email (on-demand from Gmail API) -->
+              <div :if={@last_gmail_email} class="flex items-start gap-3">
+                <div class="flex-shrink-0">
+                  <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-500">
+                    <.icon name="hero-envelope" class="h-4 w-4 text-white" />
+                  </span>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-gray-900">Last Email</p>
+                  <p :if={@last_gmail_email.subject} class="text-xs text-gray-600 truncate">{@last_gmail_email.subject}</p>
+                  <p class="mt-1 text-xs text-gray-400">{format_datetime(@last_gmail_email.date)}</p>
+                  <p :if={@last_gmail_email.direction} class="text-xs text-gray-400">
+                    {if @last_gmail_email.direction == "inbound", do: "Received", else: "Sent"}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Last Communication (from database) -->
+              <div :if={@last_communication && !@last_gmail_email} class="flex items-start gap-3">
                 <div class="flex-shrink-0">
                   <span class={["inline-flex h-8 w-8 items-center justify-center rounded-lg", communication_channel_bg(@last_communication.channel)]}>
                     <.icon name={communication_channel_icon(@last_communication.channel)} class="h-4 w-4 text-white" />
@@ -1520,6 +1542,20 @@ defmodule ConeziaWeb.EntityLive.Show do
     case Reminders.list_reminders_for_entity(entity_id, user_id, limit: 5) do
       {reminders, _meta} -> reminders
       reminders when is_list(reminders) -> reminders
+    end
+  end
+
+  defp fetch_last_gmail_email(user_id, identifiers) do
+    # Get the first email identifier to query Gmail
+    case Enum.find(identifiers, &(&1.type == "email")) do
+      nil ->
+        nil
+
+      email_identifier ->
+        case Gmail.get_last_email_with_contact(user_id, email_identifier.value) do
+          {:ok, email_info} -> email_info
+          {:error, _reason} -> nil
+        end
     end
   end
 
