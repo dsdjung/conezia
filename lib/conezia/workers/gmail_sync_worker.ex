@@ -286,7 +286,13 @@ defmodule Conezia.Workers.GmailSyncWorker do
   defp parse_email_address(header) do
     case Regex.run(~r/^(?:([^<]+)\s*)?<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?$/, String.trim(header)) do
       [_, name, email] ->
-        name = if name && String.trim(name) != "", do: String.trim(name), else: nil
+        name = if name && String.trim(name) != "" do
+          name
+          |> String.trim()
+          |> strip_surrounding_quotes()
+        else
+          nil
+        end
         {name, String.downcase(email)}
 
       [_, email] ->
@@ -295,6 +301,13 @@ defmodule Conezia.Workers.GmailSyncWorker do
       _ ->
         nil
     end
+  end
+
+  # Remove surrounding double or single quotes from a string
+  defp strip_surrounding_quotes(str) do
+    str
+    |> String.trim("\"")
+    |> String.trim("'")
   end
 
   defp parse_email_addresses(nil), do: []

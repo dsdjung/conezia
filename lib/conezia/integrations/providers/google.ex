@@ -643,7 +643,13 @@ defmodule Conezia.Integrations.Providers.Google do
   defp parse_single_email_address(address) do
     case Regex.run(~r/^(?:([^<]+)\s*)?<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?$/, String.trim(address)) do
       [_, name, email] ->
-        name = if name && String.trim(name) != "", do: String.trim(name), else: nil
+        name = if name && String.trim(name) != "" do
+          name
+          |> String.trim()
+          |> strip_surrounding_quotes()
+        else
+          nil
+        end
         {name, email}
 
       [_, email] ->
@@ -652,6 +658,13 @@ defmodule Conezia.Integrations.Providers.Google do
       _ ->
         nil
     end
+  end
+
+  # Remove surrounding double or single quotes from a string
+  defp strip_surrounding_quotes(str) do
+    str
+    |> String.trim("\"")
+    |> String.trim("'")
   end
 
   defp filtered_email?({_name, email}) do
