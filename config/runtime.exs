@@ -136,6 +136,18 @@ if config_env() == :prod do
       client_secret: linkedin_client_secret
   end
 
+  # Facebook OAuth configuration - OPTIONAL for Facebook integration
+  # If not configured, Facebook will show as "Coming Soon"
+  # Get credentials from https://developers.facebook.com/apps
+  facebook_client_id = System.get_env("FACEBOOK_CLIENT_ID")
+  facebook_client_secret = System.get_env("FACEBOOK_CLIENT_SECRET")
+
+  if facebook_client_id && facebook_client_secret do
+    config :conezia, :facebook_oauth,
+      client_id: facebook_client_id,
+      client_secret: facebook_client_secret
+  end
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

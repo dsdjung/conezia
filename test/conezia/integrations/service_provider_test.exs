@@ -9,6 +9,26 @@ defmodule Conezia.Integrations.ServiceProviderTest do
       assert provider == Conezia.Integrations.Providers.GoogleContacts
     end
 
+    test "returns Google Calendar provider for 'google_calendar'" do
+      assert {:ok, provider} = ServiceProvider.get_provider("google_calendar")
+      assert provider == Conezia.Integrations.Providers.GoogleCalendar
+    end
+
+    test "returns LinkedIn provider for 'linkedin'" do
+      assert {:ok, provider} = ServiceProvider.get_provider("linkedin")
+      assert provider == Conezia.Integrations.Providers.LinkedIn
+    end
+
+    test "returns iCloud provider for 'icloud'" do
+      assert {:ok, provider} = ServiceProvider.get_provider("icloud")
+      assert provider == Conezia.Integrations.Providers.ICloudContacts
+    end
+
+    test "returns Facebook provider for 'facebook'" do
+      assert {:ok, provider} = ServiceProvider.get_provider("facebook")
+      assert provider == Conezia.Integrations.Providers.Facebook
+    end
+
     test "returns error for unknown service" do
       assert {:error, "Unknown service: unknown_service"} = ServiceProvider.get_provider("unknown_service")
     end
@@ -30,20 +50,34 @@ defmodule Conezia.Integrations.ServiceProviderTest do
       end
     end
 
-    test "includes google_contacts as available" do
+    test "includes all expected services" do
       providers = ServiceProvider.available_providers()
-      google = Enum.find(providers, &(&1.service == "google_contacts"))
+      services = Enum.map(providers, & &1.service)
 
-      assert google != nil
-      assert google.status == :available
-      assert google.display_name == "Google Contacts"
+      assert "google_contacts" in services
+      assert "google_calendar" in services
+      assert "linkedin" in services
+      assert "icloud" in services
+      assert "facebook" in services
+      assert "outlook" in services
+    end
+
+    test "icloud is always available (uses app-specific passwords)" do
+      providers = ServiceProvider.available_providers()
+      icloud = Enum.find(providers, &(&1.service == "icloud"))
+
+      assert icloud != nil
+      assert icloud.status == :available
+      assert icloud.display_name == "iCloud Contacts"
     end
 
     test "includes coming_soon services" do
       providers = ServiceProvider.available_providers()
       coming_soon = Enum.filter(providers, &(&1.status == :coming_soon))
 
-      assert length(coming_soon) > 0
+      # At least outlook should be coming_soon
+      services = Enum.map(coming_soon, & &1.service)
+      assert "outlook" in services
     end
   end
 end

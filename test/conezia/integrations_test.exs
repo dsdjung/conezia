@@ -18,6 +18,21 @@ defmodule Conezia.IntegrationsTest do
     end
 
     test "marks connected services appropriately" do
+      # Set up Google OAuth config for this test
+      original = Application.get_env(:conezia, :google_oauth)
+      Application.put_env(:conezia, :google_oauth, [
+        client_id: "test_client_id",
+        client_secret: "test_client_secret"
+      ])
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:conezia, :google_oauth, original)
+        else
+          Application.delete_env(:conezia, :google_oauth)
+        end
+      end)
+
       user = insert(:user)
 
       # No connected services, so status should be :available

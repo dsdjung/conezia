@@ -90,3 +90,12 @@ if System.get_env("LINKEDIN_CLIENT_ID") do
     client_id: System.get_env("LINKEDIN_CLIENT_ID"),
     client_secret: System.get_env("LINKEDIN_CLIENT_SECRET")
 end
+
+# Facebook OAuth configuration (optional, from environment variables)
+# If not set, Facebook will show as "Coming Soon" in Settings
+# Get credentials from https://developers.facebook.com/apps
+if System.get_env("FACEBOOK_CLIENT_ID") do
+  config :conezia, :facebook_oauth,
+    client_id: System.get_env("FACEBOOK_CLIENT_ID"),
+    client_secret: System.get_env("FACEBOOK_CLIENT_SECRET")
+end

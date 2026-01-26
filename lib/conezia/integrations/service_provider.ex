@@ -60,7 +60,10 @@ defmodule Conezia.Integrations.ServiceProvider do
   Returns the provider module for a given service name.
   """
   def get_provider("google_contacts"), do: {:ok, Conezia.Integrations.Providers.GoogleContacts}
+  def get_provider("google_calendar"), do: {:ok, Conezia.Integrations.Providers.GoogleCalendar}
   def get_provider("linkedin"), do: {:ok, Conezia.Integrations.Providers.LinkedIn}
+  def get_provider("icloud"), do: {:ok, Conezia.Integrations.Providers.ICloudContacts}
+  def get_provider("facebook"), do: {:ok, Conezia.Integrations.Providers.Facebook}
   def get_provider(service), do: {:error, "Unknown service: #{service}"}
 
   @doc """
@@ -73,7 +76,14 @@ defmodule Conezia.Integrations.ServiceProvider do
         module: Conezia.Integrations.Providers.GoogleContacts,
         display_name: "Google Contacts",
         icon: "hero-user-group",
-        status: :available
+        status: google_status()
+      },
+      %{
+        service: "google_calendar",
+        module: Conezia.Integrations.Providers.GoogleCalendar,
+        display_name: "Google Calendar",
+        icon: "hero-calendar-days",
+        status: google_status()
       },
       %{
         service: "linkedin",
@@ -84,10 +94,17 @@ defmodule Conezia.Integrations.ServiceProvider do
       },
       %{
         service: "icloud",
-        module: nil,
-        display_name: "iCloud",
+        module: Conezia.Integrations.Providers.ICloudContacts,
+        display_name: "iCloud Contacts",
         icon: "hero-cloud",
-        status: :coming_soon
+        status: :available
+      },
+      %{
+        service: "facebook",
+        module: Conezia.Integrations.Providers.Facebook,
+        display_name: "Facebook",
+        icon: "hero-user-group",
+        status: facebook_status()
       },
       %{
         service: "outlook",
@@ -99,9 +116,29 @@ defmodule Conezia.Integrations.ServiceProvider do
     ]
   end
 
+  # Google services are available if configured
+  defp google_status do
+    config = Application.get_env(:conezia, :google_oauth, [])
+    if config[:client_id] && config[:client_secret] do
+      :available
+    else
+      :coming_soon
+    end
+  end
+
   # LinkedIn is available if configured, otherwise coming_soon
   defp linkedin_status do
     config = Application.get_env(:conezia, :linkedin_oauth, [])
+    if config[:client_id] && config[:client_secret] do
+      :available
+    else
+      :coming_soon
+    end
+  end
+
+  # Facebook is available if configured
+  defp facebook_status do
+    config = Application.get_env(:conezia, :facebook_oauth, [])
     if config[:client_id] && config[:client_secret] do
       :available
     else
