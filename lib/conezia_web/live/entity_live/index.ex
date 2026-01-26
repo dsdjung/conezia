@@ -15,6 +15,7 @@ defmodule ConeziaWeb.EntityLive.Index do
     {entities, meta} = Entities.list_entities(user.id, limit: @page_size, sort: "name")
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
+    total_count = Entities.count_entities(user.id)
 
     socket =
       socket
@@ -26,6 +27,7 @@ defmodule ConeziaWeb.EntityLive.Index do
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
       |> assign(:loading, false)
+      |> assign(:total_count, total_count)
       |> stream(:entities, entities)
 
     {:ok, socket}
@@ -57,6 +59,7 @@ defmodule ConeziaWeb.EntityLive.Index do
     {entities, meta} = Entities.list_entities(user.id, search: search, type: type, sort: sort, limit: @page_size)
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
+    total_count = Entities.count_entities(user.id, search: search, type: type)
 
     socket =
       socket
@@ -64,6 +67,7 @@ defmodule ConeziaWeb.EntityLive.Index do
       |> assign(:relationships, relationships)
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
+      |> assign(:total_count, total_count)
       |> stream(:entities, entities, reset: true)
 
     {:noreply, socket}
@@ -78,6 +82,7 @@ defmodule ConeziaWeb.EntityLive.Index do
     {entities, meta} = Entities.list_entities(user.id, search: search, type: type, sort: sort, limit: @page_size)
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
+    total_count = Entities.count_entities(user.id, search: search, type: type)
 
     socket =
       socket
@@ -85,6 +90,7 @@ defmodule ConeziaWeb.EntityLive.Index do
       |> assign(:relationships, relationships)
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
+      |> assign(:total_count, total_count)
       |> stream(:entities, entities, reset: true)
 
     {:noreply, socket}
@@ -197,19 +203,24 @@ defmodule ConeziaWeb.EntityLive.Index do
 
       <!-- Search and filters -->
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <form phx-change="search" phx-submit="search" class="flex-1 max-w-md">
-          <div class="relative">
-            <span class="hero-magnifying-glass absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              name="search"
-              value={@search}
-              placeholder="Search connections..."
-              phx-debounce="300"
-              class="block w-full rounded-lg border-gray-300 pl-10 text-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </form>
+        <div class="flex items-center gap-4 flex-1">
+          <form phx-change="search" phx-submit="search" class="flex-1 max-w-md">
+            <div class="relative">
+              <span class="hero-magnifying-glass absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                name="search"
+                value={@search}
+                placeholder="Search connections..."
+                phx-debounce="300"
+                class="block w-full rounded-lg border-gray-300 pl-10 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+            </div>
+          </form>
+          <span class="text-sm text-gray-500 whitespace-nowrap">
+            {format_count(@total_count)}
+          </span>
+        </div>
 
         <div class="flex gap-2">
           <form phx-change="sort">
@@ -413,4 +424,7 @@ defmodule ConeziaWeb.EntityLive.Index do
   defp source_color("icloud"), do: :gray
   defp source_color("outlook"), do: :blue
   defp source_color(_), do: :gray
+
+  defp format_count(1), do: "1 connection"
+  defp format_count(count), do: "#{count} connections"
 end

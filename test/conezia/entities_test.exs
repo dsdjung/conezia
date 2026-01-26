@@ -152,6 +152,57 @@ defmodule Conezia.EntitiesTest do
 
       assert Entities.count_user_entities(user.id) == 2
     end
+
+    test "count_entities/2 returns count with no filters" do
+      user = insert(:user)
+      insert(:entity, owner: user)
+      insert(:entity, owner: user)
+      insert(:entity, owner: user, archived_at: DateTime.utc_now())
+
+      assert Entities.count_entities(user.id) == 2
+    end
+
+    test "count_entities/2 filters by type" do
+      user = insert(:user)
+      insert(:entity, owner: user, type: "person")
+      insert(:entity, owner: user, type: "person")
+      insert(:entity, owner: user, type: "organization")
+
+      assert Entities.count_entities(user.id, type: "person") == 2
+      assert Entities.count_entities(user.id, type: "organization") == 1
+    end
+
+    test "count_entities/2 filters by search" do
+      user = insert(:user)
+      insert(:entity, owner: user, name: "Alice Smith")
+      insert(:entity, owner: user, name: "Bob Jones")
+      insert(:entity, owner: user, name: "Alice Johnson")
+
+      assert Entities.count_entities(user.id, search: "Alice") == 2
+      assert Entities.count_entities(user.id, search: "Bob") == 1
+      assert Entities.count_entities(user.id, search: "Xyz") == 0
+    end
+
+    test "count_entities/2 combines type and search filters" do
+      user = insert(:user)
+      insert(:entity, owner: user, name: "Alice Smith", type: "person")
+      insert(:entity, owner: user, name: "Acme Corp", type: "organization")
+      insert(:entity, owner: user, name: "Alice Inc", type: "organization")
+
+      assert Entities.count_entities(user.id, search: "Alice", type: "person") == 1
+      assert Entities.count_entities(user.id, search: "Alice", type: "organization") == 1
+      assert Entities.count_entities(user.id, search: "Alice") == 2
+    end
+
+    test "count_entities/2 excludes archived by default" do
+      user = insert(:user)
+      insert(:entity, owner: user, name: "Active")
+      insert(:entity, owner: user, name: "Archived", archived_at: DateTime.utc_now())
+
+      assert Entities.count_entities(user.id) == 1
+      assert Entities.count_entities(user.id, status: "all") == 2
+      assert Entities.count_entities(user.id, status: "archived") == 1
+    end
   end
 
   describe "entity lookup functions" do

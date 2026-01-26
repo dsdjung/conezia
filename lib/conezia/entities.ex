@@ -84,6 +84,23 @@ defmodule Conezia.Entities do
     |> Repo.aggregate(:count)
   end
 
+  @doc """
+  Counts entities matching the given filters.
+
+  Supports the same filter options as list_entities: type, status, search.
+  """
+  def count_entities(user_id, opts \\ []) do
+    type = Keyword.get(opts, :type)
+    status = Keyword.get(opts, :status, "active")
+    search = Keyword.get(opts, :search)
+
+    from(e in Entity, where: e.owner_id == ^user_id)
+    |> filter_by_type(type)
+    |> filter_by_status(status)
+    |> filter_by_search(search)
+    |> Repo.aggregate(:count)
+  end
+
   def create_entity(attrs) do
     %Entity{}
     |> Entity.changeset(attrs)
