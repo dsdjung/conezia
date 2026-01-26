@@ -295,7 +295,7 @@ defmodule Conezia.Integrations.Providers.Google do
   end
 
   defp parse_other_contact(contact) do
-    name = get_primary_value(contact["names"], "displayName")
+    name = get_primary_value(contact["names"], "displayName") |> sanitize_name()
 
     # For other contacts, fall back to email-derived name if no display name
     email = get_primary_value(contact["emailAddresses"], "value")
@@ -325,7 +325,7 @@ defmodule Conezia.Integrations.Providers.Google do
   end
 
   defp parse_people_connection(connection) do
-    name = get_primary_value(connection["names"], "displayName")
+    name = get_primary_value(connection["names"], "displayName") |> sanitize_name()
 
     if name do
       resource_name = connection["resourceName"]
@@ -455,7 +455,7 @@ defmodule Conezia.Integrations.Providers.Google do
     if email do
       external_id = "gcal:#{String.downcase(email)}"
       %{
-        name: attendee["displayName"] || extract_name_from_email(email),
+        name: sanitize_name(attendee["displayName"]) || extract_name_from_email(email),
         email: email,
         phone: nil,
         organization: nil,
@@ -478,7 +478,7 @@ defmodule Conezia.Integrations.Providers.Google do
     if email do
       external_id = "gcal:#{String.downcase(email)}"
       %{
-        name: organizer["displayName"] || extract_name_from_email(email),
+        name: sanitize_name(organizer["displayName"]) || extract_name_from_email(email),
         email: email,
         phone: nil,
         organization: nil,
@@ -674,6 +674,18 @@ defmodule Conezia.Integrations.Providers.Google do
   # ============================================================================
   # Common Helpers
   # ============================================================================
+
+  # Sanitize a name by removing surrounding quotes and trimming whitespace
+  defp sanitize_name(nil), do: nil
+  defp sanitize_name(name) do
+    name
+    |> String.trim()
+    |> strip_surrounding_quotes()
+    |> case do
+      "" -> nil
+      sanitized -> sanitized
+    end
+  end
 
   defp extract_name_from_email(email) do
     email
