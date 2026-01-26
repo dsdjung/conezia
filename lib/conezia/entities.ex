@@ -18,23 +18,26 @@ defmodule Conezia.Entities do
     |> Repo.one()
   end
 
+  @valid_sort_options ~w(name name_desc last_interaction recent oldest)
+
   def list_entities(user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
     offset = Keyword.get(opts, :offset, 0)
     type = Keyword.get(opts, :type)
     status = Keyword.get(opts, :status, "active")
     search = Keyword.get(opts, :search)
+    sort = Keyword.get(opts, :sort, "name")
 
     query = from e in Entity,
       where: e.owner_id == ^user_id,
       limit: ^(limit + 1),
-      offset: ^offset,
-      order_by: [desc: e.last_interaction_at, desc: e.inserted_at]
+      offset: ^offset
 
     entities = query
     |> filter_by_type(type)
     |> filter_by_status(status)
     |> filter_by_search(search)
+    |> apply_sort(sort)
     |> Repo.all()
 
     # Check if there are more results
@@ -62,6 +65,18 @@ defmodule Conezia.Entities do
     search_term = "%#{search}%"
     where(query, [e], ilike(e.name, ^search_term) or ilike(e.description, ^search_term))
   end
+
+  defp apply_sort(query, "name"), do: order_by(query, [e], asc: e.name)
+  defp apply_sort(query, "name_desc"), do: order_by(query, [e], desc: e.name)
+  defp apply_sort(query, "last_interaction"), do: order_by(query, [e], [desc_nulls_last: e.last_interaction_at, asc: e.name])
+  defp apply_sort(query, "recent"), do: order_by(query, [e], [desc: e.inserted_at])
+  defp apply_sort(query, "oldest"), do: order_by(query, [e], [asc: e.inserted_at])
+  defp apply_sort(query, _), do: order_by(query, [e], asc: e.name)
+
+  @doc """
+  Returns the list of valid sort options.
+  """
+  def valid_sort_options, do: @valid_sort_options
 
   def count_user_entities(user_id) do
     Entity

@@ -47,6 +47,68 @@ defmodule Conezia.EntitiesTest do
       assert hd(entities).type == "person"
     end
 
+    test "list_entities/2 sorts by name (A-Z) by default" do
+      user = insert(:user)
+      insert(:entity, owner: user, name: "Charlie")
+      insert(:entity, owner: user, name: "Alice")
+      insert(:entity, owner: user, name: "Bob")
+
+      {entities, _meta} = Entities.list_entities(user.id)
+      names = Enum.map(entities, & &1.name)
+      assert names == ["Alice", "Bob", "Charlie"]
+    end
+
+    test "list_entities/2 sorts by name descending (Z-A)" do
+      user = insert(:user)
+      insert(:entity, owner: user, name: "Alice")
+      insert(:entity, owner: user, name: "Charlie")
+      insert(:entity, owner: user, name: "Bob")
+
+      {entities, _meta} = Entities.list_entities(user.id, sort: "name_desc")
+      names = Enum.map(entities, & &1.name)
+      assert names == ["Charlie", "Bob", "Alice"]
+    end
+
+    test "list_entities/2 sorts by last interaction" do
+      user = insert(:user)
+      old_interaction = DateTime.add(DateTime.utc_now(), -7, :day)
+      recent_interaction = DateTime.add(DateTime.utc_now(), -1, :day)
+
+      insert(:entity, owner: user, name: "Old", last_interaction_at: old_interaction)
+      insert(:entity, owner: user, name: "Recent", last_interaction_at: recent_interaction)
+      insert(:entity, owner: user, name: "Never", last_interaction_at: nil)
+
+      {entities, _meta} = Entities.list_entities(user.id, sort: "last_interaction")
+      names = Enum.map(entities, & &1.name)
+      # Recent first, then old, then never (nulls last)
+      assert names == ["Recent", "Old", "Never"]
+    end
+
+    test "list_entities/2 sorts by recently added" do
+      user = insert(:user)
+      # Insert with slight delays to ensure different timestamps
+      e1 = insert(:entity, owner: user, name: "First")
+      e2 = insert(:entity, owner: user, name: "Second")
+      e3 = insert(:entity, owner: user, name: "Third")
+
+      {entities, _meta} = Entities.list_entities(user.id, sort: "recent")
+      ids = Enum.map(entities, & &1.id)
+      # Most recently added first
+      assert ids == [e3.id, e2.id, e1.id]
+    end
+
+    test "list_entities/2 sorts by oldest first" do
+      user = insert(:user)
+      e1 = insert(:entity, owner: user, name: "First")
+      e2 = insert(:entity, owner: user, name: "Second")
+      e3 = insert(:entity, owner: user, name: "Third")
+
+      {entities, _meta} = Entities.list_entities(user.id, sort: "oldest")
+      ids = Enum.map(entities, & &1.id)
+      # Oldest first
+      assert ids == [e1.id, e2.id, e3.id]
+    end
+
     test "create_entity/1 creates entity" do
       user = insert(:user)
       attrs = %{name: "Test Entity", type: "person", owner_id: user.id}

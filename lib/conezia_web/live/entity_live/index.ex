@@ -12,7 +12,7 @@ defmodule ConeziaWeb.EntityLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
-    {entities, meta} = Entities.list_entities(user.id, limit: @page_size)
+    {entities, meta} = Entities.list_entities(user.id, limit: @page_size, sort: "name")
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
@@ -21,6 +21,7 @@ defmodule ConeziaWeb.EntityLive.Index do
       |> assign(:page_title, "Connections")
       |> assign(:search, "")
       |> assign(:type_filter, nil)
+      |> assign(:sort, "name")
       |> assign(:relationships, relationships)
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
@@ -51,8 +52,9 @@ defmodule ConeziaWeb.EntityLive.Index do
   def handle_event("search", %{"search" => search}, socket) do
     user = socket.assigns.current_user
     type = socket.assigns.type_filter
+    sort = socket.assigns.sort
 
-    {entities, meta} = Entities.list_entities(user.id, search: search, type: type, limit: @page_size)
+    {entities, meta} = Entities.list_entities(user.id, search: search, type: type, sort: sort, limit: @page_size)
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
@@ -70,15 +72,36 @@ defmodule ConeziaWeb.EntityLive.Index do
   def handle_event("filter_type", %{"type" => type}, socket) do
     user = socket.assigns.current_user
     search = socket.assigns.search
+    sort = socket.assigns.sort
     type = if type == "", do: nil, else: type
 
-    {entities, meta} = Entities.list_entities(user.id, search: search, type: type, limit: @page_size)
+    {entities, meta} = Entities.list_entities(user.id, search: search, type: type, sort: sort, limit: @page_size)
     entity_ids = Enum.map(entities, & &1.id)
     relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
 
     socket =
       socket
       |> assign(:type_filter, type)
+      |> assign(:relationships, relationships)
+      |> assign(:page, 0)
+      |> assign(:has_more, meta.has_more)
+      |> stream(:entities, entities, reset: true)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("sort", %{"sort" => sort}, socket) do
+    user = socket.assigns.current_user
+    search = socket.assigns.search
+    type = socket.assigns.type_filter
+
+    {entities, meta} = Entities.list_entities(user.id, search: search, type: type, sort: sort, limit: @page_size)
+    entity_ids = Enum.map(entities, & &1.id)
+    relationships = Entities.get_relationships_for_entities(user.id, entity_ids)
+
+    socket =
+      socket
+      |> assign(:sort, sort)
       |> assign(:relationships, relationships)
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
@@ -95,6 +118,7 @@ defmodule ConeziaWeb.EntityLive.Index do
       user = socket.assigns.current_user
       search = socket.assigns.search
       type = socket.assigns.type_filter
+      sort = socket.assigns.sort
       next_page = socket.assigns.page + 1
       offset = next_page * @page_size
 
@@ -103,6 +127,7 @@ defmodule ConeziaWeb.EntityLive.Index do
       {entities, meta} = Entities.list_entities(user.id,
         search: search,
         type: type,
+        sort: sort,
         limit: @page_size,
         offset: offset
       )
@@ -186,16 +211,31 @@ defmodule ConeziaWeb.EntityLive.Index do
           </div>
         </form>
 
-        <form phx-change="filter_type">
-          <select
-            name="type"
-            class="block rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
-          >
-            <option value="">All Types</option>
-            <option value="person" selected={@type_filter == "person"}>People</option>
-            <option value="organization" selected={@type_filter == "organization"}>Organizations</option>
-          </select>
-        </form>
+        <div class="flex gap-2">
+          <form phx-change="sort">
+            <select
+              name="sort"
+              class="block rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+            >
+              <option value="name" selected={@sort == "name"}>Name (A-Z)</option>
+              <option value="name_desc" selected={@sort == "name_desc"}>Name (Z-A)</option>
+              <option value="last_interaction" selected={@sort == "last_interaction"}>Last Interaction</option>
+              <option value="recent" selected={@sort == "recent"}>Recently Added</option>
+              <option value="oldest" selected={@sort == "oldest"}>Oldest First</option>
+            </select>
+          </form>
+
+          <form phx-change="filter_type">
+            <select
+              name="type"
+              class="block rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+            >
+              <option value="">All Types</option>
+              <option value="person" selected={@type_filter == "person"}>People</option>
+              <option value="organization" selected={@type_filter == "organization"}>Organizations</option>
+            </select>
+          </form>
+        </div>
       </div>
 
       <!-- Entity list -->
