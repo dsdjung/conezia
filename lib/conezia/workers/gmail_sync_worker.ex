@@ -303,11 +303,17 @@ defmodule Conezia.Workers.GmailSyncWorker do
     end
   end
 
-  # Remove surrounding double or single quotes from a string
+  # Remove leading/trailing quotes and angle brackets from a string
+  # Handles: "Name", 'Name', <Name>, Name", "Name, Name>, <Name, etc.
   defp strip_surrounding_quotes(str) do
     str
-    |> String.trim("\"")
-    |> String.trim("'")
+    |> String.trim_leading("\"")
+    |> String.trim_leading("'")
+    |> String.trim_leading("<")
+    |> String.trim_trailing("\"")
+    |> String.trim_trailing("'")
+    |> String.trim_trailing(">")
+    |> String.trim()
   end
 
   defp parse_email_addresses(nil), do: []
