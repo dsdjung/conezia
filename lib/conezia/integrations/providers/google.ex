@@ -185,8 +185,26 @@ defmodule Conezia.Integrations.Providers.Google do
   # ============================================================================
 
   defp fetch_from_contacts(access_token, _opts) do
-    # Fetch all contacts with pagination
-    fetch_all_contacts_pages(access_token, nil, [])
+    # Fetch from both "My Contacts" and "Other Contacts"
+    # "Other Contacts" contains auto-created contacts from email interactions
+    my_contacts = fetch_all_contacts_pages(access_token, nil, [])
+    other_contacts = fetch_all_other_contacts_pages(access_token, nil, [])
+
+    case {my_contacts, other_contacts} do
+      {{:ok, my}, {:ok, other}} ->
+        {:ok, my ++ other}
+
+      {{:ok, my}, {:error, _}} ->
+        # Other contacts failed but we have my contacts
+        {:ok, my}
+
+      {{:error, _}, {:ok, other}} ->
+        # My contacts failed but we have other contacts
+        {:ok, other}
+
+      {{:error, reason}, {:error, _}} ->
+        {:error, reason}
+    end
   end
 
   defp fetch_all_contacts_pages(access_token, page_token, accumulated) do
@@ -226,6 +244,77 @@ defmodule Conezia.Integrations.Providers.Google do
 
       {:error, reason} ->
         {:error, "Failed to connect to Google: #{inspect(reason)}"}
+    end
+  end
+
+  # Fetch "Other Contacts" - auto-created contacts from email interactions
+  defp fetch_all_other_contacts_pages(access_token, page_token, accumulated) do
+    params = %{
+      readMask: "names,emailAddresses,phoneNumbers",
+      pageSize: 1000
+    }
+
+    params = if page_token, do: Map.put(params, :pageToken, page_token), else: params
+
+    url = "#{@google_people_api}/otherContacts?#{URI.encode_query(params)}"
+    headers = [{"authorization", "Bearer #{access_token}"}]
+
+    case Req.get(url, headers: headers) do
+      {:ok, %{status: 200, body: body}} ->
+        contacts = parse_other_contacts(body["otherContacts"] || [])
+        all_contacts = accumulated ++ contacts
+
+        case body["nextPageToken"] do
+          nil ->
+            {:ok, all_contacts}
+
+          next_token ->
+            fetch_all_other_contacts_pages(access_token, next_token, all_contacts)
+        end
+
+      {:ok, %{status: 401}} ->
+        {:error, "Token expired or invalid"}
+
+      {:ok, %{status: 403}} ->
+        # Other contacts scope may not be granted, return empty
+        {:ok, []}
+
+      {:ok, %{status: status, body: body}} ->
+        error = get_in(body, ["error", "message"]) || "Unknown error"
+        {:error, "Failed to fetch other contacts (#{status}): #{error}"}
+
+      {:error, reason} ->
+        {:error, "Failed to connect to Google: #{inspect(reason)}"}
+    end
+  end
+
+  defp parse_other_contacts(contacts) do
+    Enum.map(contacts, &parse_other_contact/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp parse_other_contact(contact) do
+    name = get_primary_value(contact["names"], "displayName")
+
+    # For other contacts, fall back to email-derived name if no display name
+    email = get_primary_value(contact["emailAddresses"], "value")
+    name = name || (email && extract_name_from_email(email))
+
+    if name do
+      resource_name = contact["resourceName"]
+      %{
+        name: name,
+        email: email,
+        phone: get_primary_value(contact["phoneNumbers"], "value"),
+        organization: nil,
+        notes: nil,
+        external_id: resource_name,
+        metadata: %{
+          source: "google_contacts",
+          sources: ["google_contacts"],
+          external_ids: %{"google_contacts" => resource_name}
+        }
+      }
     end
   end
 
