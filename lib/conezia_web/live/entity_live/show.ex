@@ -24,6 +24,7 @@ defmodule ConeziaWeb.EntityLive.Show do
         relationship = Entities.get_relationship_for_entity(user.id, entity.id)
         custom_fields = Entities.list_custom_fields(entity.id)
         entity_relationships = Entities.list_entity_relationships_for_entity(entity.id, user.id)
+        identifiers = Entities.list_identifiers_for_entity(entity.id)
 
         socket =
           socket
@@ -32,6 +33,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:relationship, relationship)
           |> assign(:custom_fields, custom_fields)
           |> assign(:entity_relationships, entity_relationships)
+          |> assign(:identifiers, identifiers)
           |> assign(:interactions, list_interactions(entity.id, user.id))
           |> assign(:reminders, list_reminders(entity.id, user.id))
           |> assign(:editing_custom_field, nil)
@@ -312,6 +314,62 @@ defmodule ConeziaWeb.EntityLive.Show do
               </:item>
               <:item title="Created">{format_datetime(@entity.inserted_at)}</:item>
             </.list>
+          </.card>
+
+          <!-- Contact Information (Emails, Phones) -->
+          <.card :if={@identifiers != []}>
+            <:header>Contact Information</:header>
+            <div class="space-y-4">
+              <!-- Emails -->
+              <% emails = Enum.filter(@identifiers, & &1.type == "email") %>
+              <div :if={emails != []}>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Email</h4>
+                <ul class="space-y-2">
+                  <li :for={email <- emails} class="flex items-center gap-2">
+                    <.icon name="hero-envelope" class="h-4 w-4 text-gray-400" />
+                    <a
+                      href={"mailto:#{email.value}"}
+                      class="text-sm text-indigo-600 hover:text-indigo-500"
+                    >
+                      {email.value}
+                    </a>
+                    <.badge :if={email.is_primary} color={:green} class="text-xs">Primary</.badge>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- Phones -->
+              <% phones = Enum.filter(@identifiers, & &1.type == "phone") %>
+              <div :if={phones != []}>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Phone</h4>
+                <ul class="space-y-2">
+                  <li :for={phone <- phones} class="flex items-center gap-2">
+                    <.icon name="hero-phone" class="h-4 w-4 text-gray-400" />
+                    <a
+                      href={"tel:#{phone.value}"}
+                      class="text-sm text-indigo-600 hover:text-indigo-500"
+                    >
+                      {phone.value}
+                    </a>
+                    <.badge :if={phone.is_primary} color={:green} class="text-xs">Primary</.badge>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- Other identifiers -->
+              <% others = Enum.reject(@identifiers, & &1.type in ["email", "phone"]) %>
+              <div :if={others != []}>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Other</h4>
+                <ul class="space-y-2">
+                  <li :for={identifier <- others} class="flex items-center gap-2">
+                    <.icon name="hero-identification" class="h-4 w-4 text-gray-400" />
+                    <span class="text-xs text-gray-500">{identifier.type}:</span>
+                    <span class="text-sm text-gray-900">{identifier.value}</span>
+                    <.badge :if={identifier.is_primary} color={:green} class="text-xs">Primary</.badge>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </.card>
 
           <!-- Related Connections (Entity-to-Entity Relationships) -->
