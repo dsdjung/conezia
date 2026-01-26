@@ -136,6 +136,58 @@ defmodule Conezia.Workers.SyncWorkerTest do
       # Should have added the phone identifier
       assert Entities.has_identifier?(existing.id, "phone", "+12025559999")
     end
+
+    test "updates name to longer/more complete version when merging" do
+      user = insert(:user)
+      # Existing entity has short name "Oh"
+      existing = insert(:entity, owner: user, name: "Oh")
+      insert(:identifier, entity: existing, type: "email", value: "david@example.com")
+
+      # New contact has longer name "David Oh"
+      contact = %{
+        name: "David Oh",
+        email: "david@example.com",
+        phone: nil,
+        external_id: nil,
+        organization: nil,
+        notes: nil,
+        metadata: %{source: "test"}
+      }
+
+      result = send_import_contact(user.id, contact)
+
+      assert result == {:ok, :merged}
+
+      # Name should be updated to the longer version
+      updated = Entities.get_entity_for_user(existing.id, user.id)
+      assert updated.name == "David Oh"
+    end
+
+    test "does not shorten name when merging" do
+      user = insert(:user)
+      # Existing entity has full name "David Oh"
+      existing = insert(:entity, owner: user, name: "David Oh")
+      insert(:identifier, entity: existing, type: "email", value: "david@example.com")
+
+      # New contact has shorter name "Oh"
+      contact = %{
+        name: "Oh",
+        email: "david@example.com",
+        phone: nil,
+        external_id: nil,
+        organization: nil,
+        notes: nil,
+        metadata: %{source: "test"}
+      }
+
+      result = send_import_contact(user.id, contact)
+
+      assert result == {:ok, :merged}
+
+      # Name should NOT be shortened
+      updated = Entities.get_entity_for_user(existing.id, user.id)
+      assert updated.name == "David Oh"
+    end
   end
 
   # Helper to call the private import_contact function
@@ -204,15 +256,25 @@ defmodule Conezia.Workers.SyncWorkerTest do
   end
 
   defp merge_entity(existing, contact) do
+    updates = %{}
+
+    # Prefer longer/more complete name
+    updates = if should_update_name?(existing.name, contact.name) do
+      Map.put(updates, "name", contact.name)
+    else
+      updates
+    end
+
+    # Update description if missing
     updates =
       if is_nil(existing.description) do
         cond do
-          contact.organization -> %{"description" => contact.organization}
-          contact.notes -> %{"description" => contact.notes}
-          true -> %{}
+          contact.organization -> Map.put(updates, "description", contact.organization)
+          contact.notes -> Map.put(updates, "description", contact.notes)
+          true -> updates
         end
       else
-        %{}
+        updates
       end
 
     if map_size(updates) > 0 do
@@ -222,6 +284,28 @@ defmodule Conezia.Workers.SyncWorkerTest do
     create_identifiers(existing, contact)
 
     {:ok, :merged}
+  end
+
+  # Determine if we should update the name - prefer longer, more complete names
+  defp should_update_name?(existing_name, new_name) do
+    cond do
+      is_nil(new_name) or String.trim(new_name) == "" ->
+        false
+
+      is_nil(existing_name) or String.trim(existing_name) == "" ->
+        true
+
+      true ->
+        existing_parts = existing_name |> String.trim() |> String.split() |> length()
+        new_parts = new_name |> String.trim() |> String.split() |> length()
+
+        cond do
+          new_parts > existing_parts -> true
+          new_parts < existing_parts -> false
+          String.length(new_name) > String.length(existing_name) -> true
+          true -> false
+        end
+    end
   end
 
   defp create_identifiers(entity, contact) do

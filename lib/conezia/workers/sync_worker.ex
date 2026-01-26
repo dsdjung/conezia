@@ -270,6 +270,14 @@ defmodule Conezia.Workers.SyncWorker do
     # Build updates
     updates = %{}
 
+    # Prefer longer/more complete name
+    # This handles cases where existing entity has "Oh" but contact has "David Oh"
+    updates = if should_update_name?(existing.name, contact.name) do
+      Map.put(updates, "name", contact.name)
+    else
+      updates
+    end
+
     # Update description if missing
     updates = if is_nil(existing.description) do
       cond do
@@ -295,6 +303,29 @@ defmodule Conezia.Workers.SyncWorker do
     create_identifiers(existing, contact)
 
     {:ok, :merged}
+  end
+
+  # Determine if we should update the name - prefer longer, more complete names
+  defp should_update_name?(existing_name, new_name) do
+    cond do
+      is_nil(new_name) or String.trim(new_name) == "" ->
+        false
+
+      is_nil(existing_name) or String.trim(existing_name) == "" ->
+        true
+
+      true ->
+        # Compare name completeness: more parts wins, then longer length
+        existing_parts = existing_name |> String.trim() |> String.split() |> length()
+        new_parts = new_name |> String.trim() |> String.split() |> length()
+
+        cond do
+          new_parts > existing_parts -> true
+          new_parts < existing_parts -> false
+          String.length(new_name) > String.length(existing_name) -> true
+          true -> false
+        end
+    end
   end
 
   defp stringify_keys(map) when is_map(map) do
