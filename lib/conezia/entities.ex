@@ -146,9 +146,34 @@ defmodule Conezia.Entities do
     identifiers = Repo.all(from i in Identifier, where: i.entity_id == ^source.id)
 
     count = Enum.reduce(identifiers, 0, fn identifier, acc ->
-      case Repo.update(Ecto.Changeset.change(identifier, entity_id: target.id)) do
-        {:ok, _} -> acc + 1
-        {:error, _} -> acc
+      # Check if target already has this exact identifier (same type and value)
+      existing_identifier = Repo.one(
+        from i in Identifier,
+          where: i.entity_id == ^target.id and i.type == ^identifier.type and i.value == ^identifier.value
+      )
+
+      if existing_identifier do
+        # Identifier already exists on target, just delete from source
+        Repo.delete(identifier)
+        acc
+      else
+        # Check if target already has a primary identifier of this type
+        target_has_primary = Repo.exists?(
+          from i in Identifier,
+            where: i.entity_id == ^target.id and i.type == ^identifier.type and i.is_primary == true
+        )
+
+        # If moving a primary identifier and target already has one, make it non-primary
+        changes = if identifier.is_primary and target_has_primary do
+          %{entity_id: target.id, is_primary: false}
+        else
+          %{entity_id: target.id}
+        end
+
+        case Repo.update(Ecto.Changeset.change(identifier, changes)) do
+          {:ok, _} -> acc + 1
+          {:error, _} -> acc
+        end
       end
     end)
 

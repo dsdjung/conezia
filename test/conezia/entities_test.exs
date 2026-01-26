@@ -371,6 +371,58 @@ defmodule Conezia.EntitiesTest do
 
       assert summary.tags_added == 0
     end
+
+    test "handles primary identifier conflicts when both entities have primary identifiers of same type" do
+      user = insert(:user)
+      source = insert(:entity, owner: user, name: "Source Person")
+      target = insert(:entity, owner: user, name: "Target Person")
+
+      # Both entities have a primary email - this would cause a unique constraint violation
+      # if not handled properly
+      insert(:identifier, entity: source, type: "email", value: "source@example.com", is_primary: true)
+      insert(:identifier, entity: target, type: "email", value: "target@example.com", is_primary: true)
+
+      {:ok, {merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
+
+      # Merge should succeed
+      assert merged.id == target.id
+      assert summary.identifiers_added == 1
+
+      # Both emails should exist on the target
+      assert Entities.has_identifier?(target.id, "email", "source@example.com")
+      assert Entities.has_identifier?(target.id, "email", "target@example.com")
+
+      # Target's original email should still be primary, source's should be non-primary
+      identifiers = Entities.list_identifiers_for_entity(target.id)
+      target_email = Enum.find(identifiers, &(&1.value == "target@example.com"))
+      source_email = Enum.find(identifiers, &(&1.value == "source@example.com"))
+
+      assert target_email.is_primary == true
+      assert source_email.is_primary == false
+    end
+
+    test "skips duplicate identifiers when merging" do
+      user = insert(:user)
+      source = insert(:entity, owner: user, name: "Source Person")
+      target = insert(:entity, owner: user, name: "Target Person")
+
+      # Both entities have the same email
+      insert(:identifier, entity: source, type: "email", value: "shared@example.com", is_primary: true)
+      insert(:identifier, entity: target, type: "email", value: "shared@example.com", is_primary: true)
+
+      {:ok, {merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
+
+      # Merge should succeed
+      assert merged.id == target.id
+
+      # Duplicate identifier should be skipped (not added)
+      assert summary.identifiers_added == 0
+
+      # Target should still have only one email
+      identifiers = Entities.list_identifiers_for_entity(target.id)
+      email_identifiers = Enum.filter(identifiers, &(&1.type == "email"))
+      assert length(email_identifiers) == 1
+    end
   end
 
   describe "relationships" do
