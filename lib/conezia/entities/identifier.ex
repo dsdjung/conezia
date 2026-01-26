@@ -19,6 +19,7 @@ defmodule Conezia.Entities.Identifier do
     field :label, :string
     field :is_primary, :boolean, default: false
     field :verified_at, :utc_datetime_usec
+    field :archived_at, :utc_datetime_usec
 
     belongs_to :entity, Conezia.Entities.Entity
 
@@ -26,7 +27,7 @@ defmodule Conezia.Entities.Identifier do
   end
 
   @required_fields [:type, :entity_id]
-  @optional_fields [:value, :label, :is_primary, :verified_at]
+  @optional_fields [:value, :label, :is_primary, :verified_at, :archived_at]
 
   def changeset(identifier, attrs) do
     identifier

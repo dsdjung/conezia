@@ -574,6 +574,81 @@ defmodule Conezia.EntitiesTest do
       duplicates = Entities.check_identifier_duplicates("email", "test@example.com")
       assert length(duplicates) == 1
     end
+
+    test "archive_identifier/1 sets archived_at timestamp" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, identifier} = Entities.create_identifier(%{
+        entity_id: entity.id,
+        type: "email",
+        value: "old@example.com"
+      })
+
+      assert {:ok, archived} = Entities.archive_identifier(identifier)
+      assert archived.archived_at
+    end
+
+    test "unarchive_identifier/1 clears archived_at timestamp" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      {:ok, identifier} = Entities.create_identifier(%{
+        entity_id: entity.id,
+        type: "email",
+        value: "old@example.com"
+      })
+
+      {:ok, archived} = Entities.archive_identifier(identifier)
+      assert archived.archived_at
+
+      {:ok, unarchived} = Entities.unarchive_identifier(archived)
+      assert is_nil(unarchived.archived_at)
+    end
+
+    test "list_active_identifiers_for_entity/1 excludes archived identifiers" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+
+      {:ok, active} = Entities.create_identifier(%{
+        entity_id: entity.id,
+        type: "email",
+        value: "current@example.com"
+      })
+
+      {:ok, to_archive} = Entities.create_identifier(%{
+        entity_id: entity.id,
+        type: "email",
+        value: "old@example.com"
+      })
+
+      {:ok, _archived} = Entities.archive_identifier(to_archive)
+
+      active_identifiers = Entities.list_active_identifiers_for_entity(entity.id)
+      assert length(active_identifiers) == 1
+      assert hd(active_identifiers).id == active.id
+    end
+
+    test "list_archived_identifiers_for_entity/1 returns only archived identifiers" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+
+      {:ok, _active} = Entities.create_identifier(%{
+        entity_id: entity.id,
+        type: "email",
+        value: "current@example.com"
+      })
+
+      {:ok, to_archive} = Entities.create_identifier(%{
+        entity_id: entity.id,
+        type: "email",
+        value: "old@example.com"
+      })
+
+      {:ok, archived} = Entities.archive_identifier(to_archive)
+
+      archived_identifiers = Entities.list_archived_identifiers_for_entity(entity.id)
+      assert length(archived_identifiers) == 1
+      assert hd(archived_identifiers).id == archived.id
+    end
   end
 
   describe "tags" do

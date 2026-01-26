@@ -24,7 +24,8 @@ defmodule ConeziaWeb.EntityLive.Show do
         relationship = Entities.get_relationship_for_entity(user.id, entity.id)
         custom_fields = Entities.list_custom_fields(entity.id)
         entity_relationships = Entities.list_entity_relationships_for_entity(entity.id, user.id)
-        identifiers = Entities.list_identifiers_for_entity(entity.id)
+        active_identifiers = Entities.list_active_identifiers_for_entity(entity.id)
+        archived_identifiers = Entities.list_archived_identifiers_for_entity(entity.id)
 
         socket =
           socket
@@ -33,7 +34,9 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:relationship, relationship)
           |> assign(:custom_fields, custom_fields)
           |> assign(:entity_relationships, entity_relationships)
-          |> assign(:identifiers, identifiers)
+          |> assign(:identifiers, active_identifiers)
+          |> assign(:archived_identifiers, archived_identifiers)
+          |> assign(:show_archived_identifiers, false)
           |> assign(:interactions, list_interactions(entity.id, user.id))
           |> assign(:reminders, list_reminders(entity.id, user.id))
           |> assign(:editing_custom_field, nil)
@@ -324,7 +327,7 @@ defmodule ConeziaWeb.EntityLive.Show do
 
     case Entities.create_identifier(attrs) do
       {:ok, _identifier} ->
-        identifiers = Entities.list_identifiers_for_entity(entity.id)
+        identifiers = Entities.list_active_identifiers_for_entity(entity.id)
 
         {:noreply,
          socket
@@ -351,7 +354,7 @@ defmodule ConeziaWeb.EntityLive.Show do
 
     case Entities.update_identifier(identifier, params) do
       {:ok, _updated} ->
-        identifiers = Entities.list_identifiers_for_entity(socket.assigns.entity.id)
+        identifiers = Entities.list_active_identifiers_for_entity(socket.assigns.entity.id)
 
         {:noreply,
          socket
@@ -369,11 +372,13 @@ defmodule ConeziaWeb.EntityLive.Show do
 
     case Entities.delete_identifier(identifier) do
       {:ok, _} ->
-        identifiers = Entities.list_identifiers_for_entity(socket.assigns.entity.id)
+        active_identifiers = Entities.list_active_identifiers_for_entity(socket.assigns.entity.id)
+        archived_identifiers = Entities.list_archived_identifiers_for_entity(socket.assigns.entity.id)
 
         {:noreply,
          socket
-         |> assign(:identifiers, identifiers)
+         |> assign(:identifiers, active_identifiers)
+         |> assign(:archived_identifiers, archived_identifiers)
          |> put_flash(:info, "Removed successfully")}
 
       {:error, _} ->
@@ -395,7 +400,7 @@ defmodule ConeziaWeb.EntityLive.Show do
     # Set this one as primary
     case Entities.update_identifier(identifier, %{"is_primary" => true}) do
       {:ok, _} ->
-        identifiers = Entities.list_identifiers_for_entity(entity_id)
+        identifiers = Entities.list_active_identifiers_for_entity(entity_id)
 
         {:noreply,
          socket
@@ -405,6 +410,50 @@ defmodule ConeziaWeb.EntityLive.Show do
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to set as primary")}
     end
+  end
+
+  def handle_event("archive_identifier", %{"id" => id}, socket) do
+    identifier = Entities.get_identifier(id)
+    entity_id = socket.assigns.entity.id
+
+    case Entities.archive_identifier(identifier) do
+      {:ok, _} ->
+        active_identifiers = Entities.list_active_identifiers_for_entity(entity_id)
+        archived_identifiers = Entities.list_archived_identifiers_for_entity(entity_id)
+
+        {:noreply,
+         socket
+         |> assign(:identifiers, active_identifiers)
+         |> assign(:archived_identifiers, archived_identifiers)
+         |> put_flash(:info, "Moved to archived")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to archive")}
+    end
+  end
+
+  def handle_event("unarchive_identifier", %{"id" => id}, socket) do
+    identifier = Entities.get_identifier(id)
+    entity_id = socket.assigns.entity.id
+
+    case Entities.unarchive_identifier(identifier) do
+      {:ok, _} ->
+        active_identifiers = Entities.list_active_identifiers_for_entity(entity_id)
+        archived_identifiers = Entities.list_archived_identifiers_for_entity(entity_id)
+
+        {:noreply,
+         socket
+         |> assign(:identifiers, active_identifiers)
+         |> assign(:archived_identifiers, archived_identifiers)
+         |> put_flash(:info, "Restored from archived")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to restore")}
+    end
+  end
+
+  def handle_event("toggle_archived_identifiers", _params, socket) do
+    {:noreply, assign(socket, :show_archived_identifiers, !socket.assigns.show_archived_identifiers)}
   end
 
   @impl true
@@ -658,6 +707,14 @@ defmodule ConeziaWeb.EntityLive.Show do
                         <.icon name="hero-pencil" class="h-4 w-4" />
                       </button>
                       <button
+                        phx-click="archive_identifier"
+                        phx-value-id={email.id}
+                        title="Archive (mark as old)"
+                        class="p-1 text-gray-400 hover:text-amber-600"
+                      >
+                        <.icon name="hero-archive-box" class="h-4 w-4" />
+                      </button>
+                      <button
                         phx-click="delete_identifier"
                         phx-value-id={email.id}
                         data-confirm="Remove this email address?"
@@ -707,6 +764,14 @@ defmodule ConeziaWeb.EntityLive.Show do
                         <.icon name="hero-pencil" class="h-4 w-4" />
                       </button>
                       <button
+                        phx-click="archive_identifier"
+                        phx-value-id={phone.id}
+                        title="Archive (mark as old)"
+                        class="p-1 text-gray-400 hover:text-amber-600"
+                      >
+                        <.icon name="hero-archive-box" class="h-4 w-4" />
+                      </button>
+                      <button
                         phx-click="delete_identifier"
                         phx-value-id={phone.id}
                         data-confirm="Remove this phone number?"
@@ -743,6 +808,14 @@ defmodule ConeziaWeb.EntityLive.Show do
                         <.icon name="hero-pencil" class="h-4 w-4" />
                       </button>
                       <button
+                        phx-click="archive_identifier"
+                        phx-value-id={identifier.id}
+                        title="Archive (mark as old)"
+                        class="p-1 text-gray-400 hover:text-amber-600"
+                      >
+                        <.icon name="hero-archive-box" class="h-4 w-4" />
+                      </button>
+                      <button
                         phx-click="delete_identifier"
                         phx-value-id={identifier.id}
                         data-confirm="Remove this identifier?"
@@ -757,9 +830,129 @@ defmodule ConeziaWeb.EntityLive.Show do
               </div>
 
               <!-- Empty state -->
-              <p :if={@identifiers == [] && !@adding_identifier} class="text-sm text-gray-500 text-center py-4">
+              <p :if={@identifiers == [] && !@adding_identifier && @archived_identifiers == []} class="text-sm text-gray-500 text-center py-4">
                 No contact information yet. Add an email or phone number above.
               </p>
+
+              <!-- Archived identifiers section -->
+              <div :if={@archived_identifiers != []} class="mt-4 pt-4 border-t border-gray-200">
+                <button
+                  phx-click="toggle_archived_identifiers"
+                  class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+                >
+                  <.icon
+                    name={if @show_archived_identifiers, do: "hero-chevron-down", else: "hero-chevron-right"}
+                    class="h-4 w-4"
+                  />
+                  <.icon name="hero-archive-box" class="h-4 w-4" />
+                  <span>Archived ({length(@archived_identifiers)})</span>
+                </button>
+
+                <div :if={@show_archived_identifiers} class="mt-3 space-y-3 pl-6">
+                  <!-- Archived Emails -->
+                  <% archived_emails = Enum.filter(@archived_identifiers, & &1.type == "email") %>
+                  <div :if={archived_emails != []}>
+                    <h5 class="text-xs font-medium text-gray-400 mb-1">Emails</h5>
+                    <ul class="space-y-1">
+                      <li :for={email <- archived_emails} class="group flex items-center justify-between text-gray-400">
+                        <div class="flex items-center gap-2">
+                          <.icon name="hero-envelope" class="h-4 w-4" />
+                          <span class="text-sm line-through">{email.value}</span>
+                          <span :if={email.label} class="text-xs">({email.label})</span>
+                        </div>
+                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            phx-click="unarchive_identifier"
+                            phx-value-id={email.id}
+                            title="Restore"
+                            class="p-1 text-gray-400 hover:text-green-600"
+                          >
+                            <.icon name="hero-arrow-uturn-left" class="h-4 w-4" />
+                          </button>
+                          <button
+                            phx-click="delete_identifier"
+                            phx-value-id={email.id}
+                            data-confirm="Permanently delete this email?"
+                            title="Delete permanently"
+                            class="p-1 text-gray-400 hover:text-red-600"
+                          >
+                            <.icon name="hero-trash" class="h-4 w-4" />
+                          </button>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <!-- Archived Phones -->
+                  <% archived_phones = Enum.filter(@archived_identifiers, & &1.type == "phone") %>
+                  <div :if={archived_phones != []}>
+                    <h5 class="text-xs font-medium text-gray-400 mb-1">Phones</h5>
+                    <ul class="space-y-1">
+                      <li :for={phone <- archived_phones} class="group flex items-center justify-between text-gray-400">
+                        <div class="flex items-center gap-2">
+                          <.icon name="hero-phone" class="h-4 w-4" />
+                          <span class="text-sm line-through">{phone.value}</span>
+                          <span :if={phone.label} class="text-xs">({phone.label})</span>
+                        </div>
+                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            phx-click="unarchive_identifier"
+                            phx-value-id={phone.id}
+                            title="Restore"
+                            class="p-1 text-gray-400 hover:text-green-600"
+                          >
+                            <.icon name="hero-arrow-uturn-left" class="h-4 w-4" />
+                          </button>
+                          <button
+                            phx-click="delete_identifier"
+                            phx-value-id={phone.id}
+                            data-confirm="Permanently delete this phone number?"
+                            title="Delete permanently"
+                            class="p-1 text-gray-400 hover:text-red-600"
+                          >
+                            <.icon name="hero-trash" class="h-4 w-4" />
+                          </button>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <!-- Archived Others -->
+                  <% archived_others = Enum.reject(@archived_identifiers, & &1.type in ["email", "phone"]) %>
+                  <div :if={archived_others != []}>
+                    <h5 class="text-xs font-medium text-gray-400 mb-1">Other</h5>
+                    <ul class="space-y-1">
+                      <li :for={identifier <- archived_others} class="group flex items-center justify-between text-gray-400">
+                        <div class="flex items-center gap-2">
+                          <.icon name="hero-identification" class="h-4 w-4" />
+                          <span class="text-xs">{identifier.type}:</span>
+                          <span class="text-sm line-through">{identifier.value}</span>
+                          <span :if={identifier.label} class="text-xs">({identifier.label})</span>
+                        </div>
+                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            phx-click="unarchive_identifier"
+                            phx-value-id={identifier.id}
+                            title="Restore"
+                            class="p-1 text-gray-400 hover:text-green-600"
+                          >
+                            <.icon name="hero-arrow-uturn-left" class="h-4 w-4" />
+                          </button>
+                          <button
+                            phx-click="delete_identifier"
+                            phx-value-id={identifier.id}
+                            data-confirm="Permanently delete this?"
+                            title="Delete permanently"
+                            class="p-1 text-gray-400 hover:text-red-600"
+                          >
+                            <.icon name="hero-trash" class="h-4 w-4" />
+                          </button>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
           </.card>
 

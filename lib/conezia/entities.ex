@@ -307,6 +307,44 @@ defmodule Conezia.Entities do
     Repo.delete(identifier)
   end
 
+  @doc """
+  Archive an identifier (mark as old/historical contact info).
+  """
+  def archive_identifier(%Identifier{} = identifier) do
+    identifier
+    |> Ecto.Changeset.change(%{archived_at: DateTime.utc_now()})
+    |> Repo.update()
+  end
+
+  @doc """
+  Unarchive an identifier (restore to active contact info).
+  """
+  def unarchive_identifier(%Identifier{} = identifier) do
+    identifier
+    |> Ecto.Changeset.change(%{archived_at: nil})
+    |> Repo.update()
+  end
+
+  @doc """
+  List active (non-archived) identifiers for an entity.
+  """
+  def list_active_identifiers_for_entity(entity_id) do
+    Identifier
+    |> where([i], i.entity_id == ^entity_id and is_nil(i.archived_at))
+    |> order_by([i], [desc: i.is_primary, asc: i.type])
+    |> Repo.all()
+  end
+
+  @doc """
+  List archived identifiers for an entity.
+  """
+  def list_archived_identifiers_for_entity(entity_id) do
+    Identifier
+    |> where([i], i.entity_id == ^entity_id and not is_nil(i.archived_at))
+    |> order_by([i], [asc: i.type, desc: i.archived_at])
+    |> Repo.all()
+  end
+
   def check_identifier_duplicates(type, value) do
     # Use the same blind index as the Identifier changeset for consistency
     hash = Conezia.Vault.blind_index(value, "identifier_#{type}")
