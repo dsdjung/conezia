@@ -109,7 +109,53 @@ defmodule Conezia.Entities do
   end
 
   def delete_entity(%Entity{} = entity) do
+    # Record external IDs before deletion so syncs won't re-import this entity
+    record_deleted_external_ids(entity)
     Repo.delete(entity)
+  end
+
+  defp record_deleted_external_ids(entity) do
+    # Load identifiers to get email for recording
+    entity = Repo.preload(entity, :identifiers)
+
+    # Get email from identifiers
+    entity_email =
+      entity.identifiers
+      |> Enum.find(fn i -> i.type == "email" end)
+      |> case do
+        nil -> nil
+        identifier -> identifier.value
+      end
+
+    # Get external IDs from metadata
+    external_ids = get_external_ids_from_metadata(entity.metadata)
+
+    # Only record if there are external IDs to track
+    if map_size(external_ids) > 0 do
+      Conezia.Imports.record_deleted_import(
+        entity.owner_id,
+        external_ids,
+        entity_name: entity.name,
+        entity_email: entity_email
+      )
+    end
+  end
+
+  defp get_external_ids_from_metadata(nil), do: %{}
+  defp get_external_ids_from_metadata(metadata) do
+    # Collect external IDs from both formats used in metadata
+    external_ids = metadata["external_ids"] || %{}
+
+    # Also include legacy external_id if present
+    external_ids =
+      case {metadata["external_id"], metadata["source"]} do
+        {ext_id, source} when is_binary(ext_id) and is_binary(source) ->
+          Map.put_new(external_ids, source, ext_id)
+        _ ->
+          external_ids
+      end
+
+    external_ids
   end
 
   @doc """

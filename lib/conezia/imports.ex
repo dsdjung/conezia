@@ -5,6 +5,7 @@ defmodule Conezia.Imports do
   import Ecto.Query
   alias Conezia.Repo
   alias Conezia.Imports.ImportJob
+  alias Conezia.Imports.DeletedImport
 
   def get_import_job(id), do: Repo.get(ImportJob, id)
 
@@ -90,5 +91,142 @@ defmodule Conezia.Imports do
     download_url = "/api/v1/exports/#{UUID.uuid4()}"
     expires_at = DateTime.add(DateTime.utc_now(), 3600, :second)
     {:ok, download_url, expires_at}
+  end
+
+  # ============================================================================
+  # Deleted Imports - Track deleted entities to prevent re-import
+  # ============================================================================
+
+  @doc """
+  Records that an entity with the given external IDs was deleted.
+
+  This prevents the entity from being re-imported during future syncs.
+  The external_ids should be a map of source => external_id.
+  """
+  def record_deleted_import(user_id, external_ids, opts \\ []) when is_map(external_ids) do
+    entity_name = Keyword.get(opts, :entity_name)
+    entity_email = Keyword.get(opts, :entity_email)
+
+    entries =
+      external_ids
+      |> Enum.map(fn {source, external_id} ->
+        %{
+          user_id: user_id,
+          external_id: external_id,
+          source: to_string(source),
+          entity_name: entity_name,
+          entity_email: entity_email,
+          inserted_at: DateTime.utc_now(),
+          updated_at: DateTime.utc_now()
+        }
+      end)
+
+    # Use on_conflict to handle duplicates gracefully
+    Repo.insert_all(DeletedImport, entries, on_conflict: :nothing)
+    :ok
+  end
+
+  @doc """
+  Records a single deleted import entry.
+  """
+  def record_deleted_import(user_id, external_id, source, opts) when is_binary(external_id) do
+    attrs = %{
+      user_id: user_id,
+      external_id: external_id,
+      source: to_string(source),
+      entity_name: Keyword.get(opts, :entity_name),
+      entity_email: Keyword.get(opts, :entity_email)
+    }
+
+    %DeletedImport{}
+    |> DeletedImport.changeset(attrs)
+    |> Repo.insert(on_conflict: :nothing)
+  end
+
+  @doc """
+  Checks if an external ID was previously deleted by the user.
+  """
+  def is_deleted_import?(user_id, external_id, source) do
+    from(di in DeletedImport,
+      where: di.user_id == ^user_id and di.external_id == ^external_id and di.source == ^to_string(source)
+    )
+    |> Repo.exists?()
+  end
+
+  @doc """
+  Checks if any of the external IDs were previously deleted.
+
+  Takes a map of source => external_id and returns true if any were deleted.
+  """
+  def any_deleted_import?(user_id, external_ids) when is_map(external_ids) do
+    Enum.any?(external_ids, fn {source, external_id} ->
+      is_deleted_import?(user_id, external_id, source)
+    end)
+  end
+
+  @doc """
+  Gets all deleted external IDs for a user and source.
+
+  Returns a MapSet for efficient lookups during sync.
+  """
+  def get_deleted_external_ids(user_id, source) do
+    from(di in DeletedImport,
+      where: di.user_id == ^user_id and di.source == ^to_string(source),
+      select: di.external_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @doc """
+  Gets all deleted external IDs for a user across all sources.
+
+  Returns a map of source => MapSet of external_ids for efficient lookups.
+  """
+  def get_all_deleted_external_ids(user_id) do
+    from(di in DeletedImport,
+      where: di.user_id == ^user_id,
+      select: {di.source, di.external_id}
+    )
+    |> Repo.all()
+    |> Enum.group_by(fn {source, _} -> source end, fn {_, id} -> id end)
+    |> Enum.map(fn {source, ids} -> {source, MapSet.new(ids)} end)
+    |> Map.new()
+  end
+
+  @doc """
+  Removes a deleted import record, allowing the entity to be re-imported.
+  """
+  def undelete_import(user_id, external_id, source) do
+    from(di in DeletedImport,
+      where: di.user_id == ^user_id and di.external_id == ^external_id and di.source == ^to_string(source)
+    )
+    |> Repo.delete_all()
+
+    :ok
+  end
+
+  @doc """
+  Lists deleted imports for a user with optional filtering.
+  """
+  def list_deleted_imports(user_id, opts \\ []) do
+    source = Keyword.get(opts, :source)
+    limit = Keyword.get(opts, :limit, 100)
+
+    query =
+      from(di in DeletedImport,
+        where: di.user_id == ^user_id,
+        order_by: [desc: di.inserted_at],
+        limit: ^limit
+      )
+
+    query =
+      if source do
+        where(query, [di], di.source == ^to_string(source))
+      else
+        query
+      end
+
+    Repo.all(query)
   end
 end

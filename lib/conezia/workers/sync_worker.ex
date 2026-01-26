@@ -169,15 +169,37 @@ defmodule Conezia.Workers.SyncWorker do
     if is_nil(contact.name) or contact.name == "" do
       {:ok, :skipped}
     else
-      # Check for existing entity by email or external_id
-      case find_existing_entity(user_id, contact) do
-        nil ->
-          create_entity(user_id, contact)
+      # Check if this contact was previously deleted by the user
+      if was_previously_deleted?(user_id, contact) do
+        {:ok, :skipped}
+      else
+        # Check for existing entity by email or external_id
+        case find_existing_entity(user_id, contact) do
+          nil ->
+            create_entity(user_id, contact)
 
-        existing ->
-          merge_entity(existing, contact)
+          existing ->
+            merge_entity(existing, contact)
+        end
       end
     end
+  end
+
+  # Check if this contact was previously deleted by the user
+  defp was_previously_deleted?(user_id, contact) do
+    # Check all external IDs from the contact
+    external_ids = contact.metadata[:external_ids] || %{}
+
+    # Also include the primary external_id
+    external_ids =
+      if contact.external_id && contact.metadata[:source] do
+        Map.put_new(external_ids, contact.metadata[:source], contact.external_id)
+      else
+        external_ids
+      end
+
+    # Check if any of these external IDs are in the deleted imports
+    Imports.any_deleted_import?(user_id, external_ids)
   end
 
   defp find_existing_entity(user_id, contact) do
