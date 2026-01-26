@@ -40,6 +40,8 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:new_custom_field, nil)
           |> assign(:adding_entity_relationship, false)
           |> assign(:available_entities, [])
+          |> assign(:merging, false)
+          |> assign(:merge_candidates, [])
 
         {:ok, socket}
     end
@@ -217,6 +219,53 @@ defmodule ConeziaWeb.EntityLive.Show do
     end
   end
 
+  # Merge connection events
+  def handle_event("start_merge", _params, socket) do
+    user = socket.assigns.current_user
+    entity = socket.assigns.entity
+
+    # Get other entities of the same type to merge with (exclude current entity)
+    {all_entities, _meta} = Entities.list_entities(user.id, type: entity.type)
+    merge_candidates = Enum.reject(all_entities, fn e -> e.id == entity.id end)
+
+    {:noreply,
+     socket
+     |> assign(:merging, true)
+     |> assign(:merge_candidates, merge_candidates)}
+  end
+
+  def handle_event("cancel_merge", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:merging, false)
+     |> assign(:merge_candidates, [])}
+  end
+
+  def handle_event("merge_into", %{"target_id" => target_id}, socket) do
+    user = socket.assigns.current_user
+    source_entity = socket.assigns.entity
+
+    case Entities.merge_entities(source_entity.id, target_id, user.id) do
+      {:ok, {target_entity, summary}} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Merged successfully! #{summary.identifiers_added} identifiers, #{summary.interactions_transferred} interactions transferred.")
+         |> push_navigate(to: ~p"/connections/#{target_entity.id}")}
+
+      {:error, :same_entity} ->
+        {:noreply, put_flash(socket, :error, "Cannot merge an entity with itself")}
+
+      {:error, :type_mismatch} ->
+        {:noreply, put_flash(socket, :error, "Cannot merge entities of different types")}
+
+      {:error, {:not_found, _}} ->
+        {:noreply, put_flash(socket, :error, "Entity not found")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Merge failed: #{inspect(reason)}")}
+    end
+  end
+
   @impl true
   def handle_info({ConeziaWeb.EntityLive.FormComponent, {:saved, entity}}, socket) do
     user = socket.assigns.current_user
@@ -286,6 +335,13 @@ defmodule ConeziaWeb.EntityLive.Show do
               Edit
             </.button>
           </.link>
+          <.button
+            phx-click="start_merge"
+            class="inline-flex items-center !bg-white !text-gray-700 ring-1 ring-gray-300 hover:!bg-gray-50"
+          >
+            <.icon name="hero-arrows-pointing-in" class="mr-1.5 h-5 w-5" />
+            Merge
+          </.button>
           <.button
             phx-click="delete"
             data-confirm="Are you sure you want to delete this connection? This action cannot be undone."
@@ -800,6 +856,58 @@ defmodule ConeziaWeb.EntityLive.Show do
           current_user={@current_user}
           patch={~p"/connections/#{@entity.id}"}
         />
+      </.modal>
+
+      <!-- Merge Modal -->
+      <.modal
+        :if={@merging}
+        id="merge-modal"
+        show
+        on_cancel={JS.push("cancel_merge")}
+      >
+        <div class="space-y-4">
+          <h3 class="text-lg font-semibold text-gray-900">
+            Merge "{@entity.name}" into another connection
+          </h3>
+          <p class="text-sm text-gray-500">
+            Select a connection to merge this one into. All identifiers (emails, phones),
+            interactions, and tags will be transferred to the target connection.
+            This connection will be deleted after merging.
+          </p>
+
+          <div :if={@merge_candidates == []} class="py-8 text-center">
+            <p class="text-gray-500">No other connections of this type to merge with.</p>
+          </div>
+
+          <div :if={@merge_candidates != []} class="max-h-96 overflow-y-auto">
+            <ul role="list" class="divide-y divide-gray-200">
+              <li :for={candidate <- @merge_candidates} class="py-3">
+                <button
+                  phx-click="merge_into"
+                  phx-value-target_id={candidate.id}
+                  data-confirm={"Merge \"#{@entity.name}\" into \"#{candidate.name}\"? This cannot be undone."}
+                  class="w-full flex items-center gap-3 p-2 rounded-md hover:bg-gray-50 text-left"
+                >
+                  <.avatar name={candidate.name} size={:sm} />
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium text-gray-900">{candidate.name}</p>
+                    <p class="text-xs text-gray-500 truncate">{candidate.description || "No description"}</p>
+                  </div>
+                  <.icon name="hero-arrow-right" class="h-5 w-5 text-gray-400" />
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="flex justify-end pt-4 border-t">
+            <.button
+              phx-click="cancel_merge"
+              class="!bg-white !text-gray-700 ring-1 ring-gray-300 hover:!bg-gray-50"
+            >
+              Cancel
+            </.button>
+          </div>
+        </div>
       </.modal>
     </div>
     """

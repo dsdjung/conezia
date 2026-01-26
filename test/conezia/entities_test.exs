@@ -274,6 +274,105 @@ defmodule Conezia.EntitiesTest do
     end
   end
 
+  describe "merge_entities/4" do
+    test "merges source entity into target, transferring identifiers" do
+      user = insert(:user)
+      source = insert(:entity, owner: user, name: "Source Person")
+      target = insert(:entity, owner: user, name: "Target Person")
+      # Use is_primary: false to avoid unique constraint issues on primary identifiers
+      insert(:identifier, entity: source, type: "email", value: "source@example.com", is_primary: false)
+      insert(:identifier, entity: source, type: "phone", value: "+12025551111", is_primary: false)
+      insert(:identifier, entity: target, type: "email", value: "target@example.com", is_primary: true)
+
+      {:ok, {merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
+
+      # Target entity is returned
+      assert merged.id == target.id
+
+      # Source entity is deleted
+      assert is_nil(Entities.get_entity(source.id))
+
+      # Identifiers are transferred
+      assert summary.identifiers_added == 2
+      assert Entities.has_identifier?(target.id, "email", "source@example.com")
+      assert Entities.has_identifier?(target.id, "phone", "+12025551111")
+      assert Entities.has_identifier?(target.id, "email", "target@example.com")
+    end
+
+    test "returns error when source entity not found" do
+      user = insert(:user)
+      target = insert(:entity, owner: user)
+
+      result = Entities.merge_entities(Ecto.UUID.generate(), target.id, user.id)
+
+      assert result == {:error, {:not_found, :source}}
+    end
+
+    test "returns error when target entity not found" do
+      user = insert(:user)
+      source = insert(:entity, owner: user)
+
+      result = Entities.merge_entities(source.id, Ecto.UUID.generate(), user.id)
+
+      assert result == {:error, {:not_found, :target}}
+    end
+
+    test "returns error when trying to merge entity with itself" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+
+      result = Entities.merge_entities(entity.id, entity.id, user.id)
+
+      assert result == {:error, :same_entity}
+    end
+
+    test "returns error when entity types don't match" do
+      user = insert(:user)
+      person = insert(:entity, owner: user, type: "person")
+      org = insert(:entity, owner: user, type: "organization")
+
+      result = Entities.merge_entities(person.id, org.id, user.id)
+
+      assert result == {:error, :type_mismatch}
+    end
+
+    test "does not allow merging entities from different users" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      source = insert(:entity, owner: user1)
+      target = insert(:entity, owner: user2)
+
+      # Try to merge as user1 - target belongs to user2
+      result = Entities.merge_entities(source.id, target.id, user1.id)
+
+      assert result == {:error, {:not_found, :target}}
+    end
+
+    test "transfers interactions from source to target" do
+      user = insert(:user)
+      source = insert(:entity, owner: user)
+      target = insert(:entity, owner: user)
+
+      # Create some interactions on the source
+      insert(:interaction, user: user, entity: source, type: "call")
+      insert(:interaction, user: user, entity: source, type: "email")
+
+      {:ok, {_merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
+
+      assert summary.interactions_transferred == 2
+    end
+
+    test "can skip tag merging with merge_tags: false" do
+      user = insert(:user)
+      source = insert(:entity, owner: user)
+      target = insert(:entity, owner: user)
+
+      {:ok, {_merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
+
+      assert summary.tags_added == 0
+    end
+  end
+
   describe "relationships" do
     test "create_relationship/1 creates relationship" do
       user = insert(:user)
