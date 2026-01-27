@@ -111,8 +111,12 @@ defmodule ConeziaWeb.EntityLive.Show do
     {:noreply, assign(socket, :new_custom_field, nil)}
   end
 
-  def handle_event("custom_field_type_changed", %{"custom_field" => %{"field_type" => field_type}}, socket) do
-    new_custom_field = Map.put(socket.assigns.new_custom_field, :field_type, field_type)
+  def handle_event("custom_field_type_changed", %{"custom_field" => params}, socket) do
+    new_custom_field =
+      socket.assigns.new_custom_field
+      |> Map.put(:field_type, params["field_type"] || socket.assigns.new_custom_field.field_type)
+      |> Map.put(:name, params["name"] || "")
+      |> Map.put(:category, params["category"] || "other")
     {:noreply, assign(socket, :new_custom_field, new_custom_field)}
   end
 
@@ -1307,6 +1311,7 @@ defmodule ConeziaWeb.EntityLive.Show do
                     <input
                       type="text"
                       name="custom_field[name]"
+                      value={@new_custom_field[:name] || ""}
                       placeholder="e.g., Birthday, Company"
                       required
                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
