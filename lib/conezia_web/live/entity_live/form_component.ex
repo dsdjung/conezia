@@ -79,6 +79,65 @@ defmodule ConeziaWeb.EntityLive.FormComponent do
           </div>
         </div>
 
+        <!-- Profile/Demographics section -->
+        <div class="border-t border-gray-200 pt-4 mt-4">
+          <h3 class="text-sm font-medium text-gray-900 mb-3">Profile</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <.input
+              field={@form[:country]}
+              type="select"
+              label="Country of Residence"
+              prompt="Select country..."
+              options={country_options()}
+            />
+            <.input
+              field={@form[:timezone]}
+              type="select"
+              label="Timezone"
+              prompt="Select timezone..."
+              options={timezone_options()}
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <.input
+              field={@form[:nationality]}
+              type="select"
+              label="Nationality"
+              prompt="Select nationality..."
+              options={country_options()}
+            />
+            <.input
+              field={@form[:ethnicity]}
+              type="text"
+              label="Ethnicity/Background"
+              placeholder="e.g., Korean, African American, Mixed"
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <.input
+              field={@form[:preferred_language]}
+              type="select"
+              label="Preferred Language"
+              prompt="Select language..."
+              options={language_options()}
+            />
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Languages Spoken</label>
+              <p class="text-xs text-gray-500 mb-2">Hold Ctrl/Cmd to select multiple</p>
+              <select
+                name="entity[languages][]"
+                multiple
+                size="4"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              >
+                <option :for={{label, value} <- language_options()} value={value} selected={value in (@form[:languages].value || [])}>
+                  {label}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <:actions>
           <.button phx-disable-with="Saving...">Save Connection</.button>
         </:actions>
@@ -217,5 +276,112 @@ defmodule ConeziaWeb.EntityLive.FormComponent do
     |> String.split()
     |> Enum.map(&String.capitalize/1)
     |> Enum.join(" ")
+  end
+
+  defp country_options do
+    [
+      {"United States", "US"},
+      {"United Kingdom", "GB"},
+      {"Canada", "CA"},
+      {"Australia", "AU"},
+      {"Germany", "DE"},
+      {"France", "FR"},
+      {"Japan", "JP"},
+      {"South Korea", "KR"},
+      {"China", "CN"},
+      {"India", "IN"},
+      {"Brazil", "BR"},
+      {"Mexico", "MX"},
+      {"Spain", "ES"},
+      {"Italy", "IT"},
+      {"Netherlands", "NL"},
+      {"Sweden", "SE"},
+      {"Switzerland", "CH"},
+      {"Singapore", "SG"},
+      {"Hong Kong", "HK"},
+      {"Taiwan", "TW"},
+      {"New Zealand", "NZ"},
+      {"Ireland", "IE"},
+      {"Israel", "IL"},
+      {"South Africa", "ZA"},
+      {"United Arab Emirates", "AE"},
+      {"Argentina", "AR"},
+      {"Chile", "CL"},
+      {"Colombia", "CO"},
+      {"Philippines", "PH"},
+      {"Thailand", "TH"},
+      {"Vietnam", "VN"},
+      {"Indonesia", "ID"},
+      {"Malaysia", "MY"},
+      {"Poland", "PL"},
+      {"Portugal", "PT"},
+      {"Belgium", "BE"},
+      {"Austria", "AT"},
+      {"Norway", "NO"},
+      {"Denmark", "DK"},
+      {"Finland", "FI"}
+    ]
+    |> Enum.sort_by(fn {label, _} -> label end)
+  end
+
+  defp timezone_options do
+    [
+      {"Pacific Time (US)", "America/Los_Angeles"},
+      {"Mountain Time (US)", "America/Denver"},
+      {"Central Time (US)", "America/Chicago"},
+      {"Eastern Time (US)", "America/New_York"},
+      {"London (GMT/BST)", "Europe/London"},
+      {"Paris (CET/CEST)", "Europe/Paris"},
+      {"Berlin (CET/CEST)", "Europe/Berlin"},
+      {"Tokyo (JST)", "Asia/Tokyo"},
+      {"Seoul (KST)", "Asia/Seoul"},
+      {"Shanghai (CST)", "Asia/Shanghai"},
+      {"Hong Kong (HKT)", "Asia/Hong_Kong"},
+      {"Singapore (SGT)", "Asia/Singapore"},
+      {"Sydney (AEST/AEDT)", "Australia/Sydney"},
+      {"Auckland (NZST/NZDT)", "Pacific/Auckland"},
+      {"Mumbai (IST)", "Asia/Kolkata"},
+      {"Dubai (GST)", "Asia/Dubai"},
+      {"São Paulo (BRT)", "America/Sao_Paulo"},
+      {"Toronto (EST/EDT)", "America/Toronto"},
+      {"Vancouver (PST/PDT)", "America/Vancouver"},
+      {"UTC", "Etc/UTC"}
+    ]
+  end
+
+  defp language_options do
+    [
+      {"English", "en"},
+      {"Spanish", "es"},
+      {"French", "fr"},
+      {"German", "de"},
+      {"Italian", "it"},
+      {"Portuguese", "pt"},
+      {"Chinese (Simplified)", "zh-Hans"},
+      {"Chinese (Traditional)", "zh-Hant"},
+      {"Japanese", "ja"},
+      {"Korean", "ko"},
+      {"Arabic", "ar"},
+      {"Hindi", "hi"},
+      {"Russian", "ru"},
+      {"Dutch", "nl"},
+      {"Swedish", "sv"},
+      {"Norwegian", "no"},
+      {"Danish", "da"},
+      {"Finnish", "fi"},
+      {"Polish", "pl"},
+      {"Turkish", "tr"},
+      {"Thai", "th"},
+      {"Vietnamese", "vi"},
+      {"Indonesian", "id"},
+      {"Malay", "ms"},
+      {"Tagalog", "tl"},
+      {"Hebrew", "he"},
+      {"Greek", "el"},
+      {"Czech", "cs"},
+      {"Hungarian", "hu"},
+      {"Romanian", "ro"}
+    ]
+    |> Enum.sort_by(fn {label, _} -> label end)
   end
 end

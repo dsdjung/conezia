@@ -19,6 +19,14 @@ defmodule Conezia.Entities.Entity do
     field :last_interaction_at, :utc_datetime_usec
     field :archived_at, :utc_datetime_usec
 
+    # Demographic/profile fields
+    field :country, :string
+    field :timezone, :string
+    field :nationality, :string
+    field :ethnicity, :string
+    field :languages, {:array, :string}, default: []
+    field :preferred_language, :string
+
     belongs_to :owner, Conezia.Accounts.User
     has_many :relationships, Conezia.Entities.Relationship
     has_many :identifiers, Conezia.Entities.Identifier
@@ -35,7 +43,10 @@ defmodule Conezia.Entities.Entity do
   end
 
   @required_fields [:type, :name, :owner_id]
-  @optional_fields [:description, :avatar_url, :metadata, :last_interaction_at, :archived_at]
+  @optional_fields [
+    :description, :avatar_url, :metadata, :last_interaction_at, :archived_at,
+    :country, :timezone, :nationality, :ethnicity, :languages, :preferred_language
+  ]
 
   def changeset(entity, attrs) do
     entity
@@ -44,6 +55,11 @@ defmodule Conezia.Entities.Entity do
     |> validate_inclusion(:type, @entity_types)
     |> validate_length(:name, min: 1, max: 255)
     |> validate_length(:description, max: 10_000)
+    |> validate_length(:country, max: 2)
+    |> validate_length(:nationality, max: 2)
+    |> validate_length(:timezone, max: 64)
+    |> validate_length(:ethnicity, max: 128)
+    |> validate_length(:preferred_language, max: 8)
     |> validate_url(:avatar_url)
     |> foreign_key_constraint(:owner_id)
   end

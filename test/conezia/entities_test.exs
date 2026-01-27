@@ -123,6 +123,45 @@ defmodule Conezia.EntitiesTest do
       assert updated.name == "Updated Name"
     end
 
+    test "create_entity/1 with demographic fields" do
+      user = insert(:user)
+      attrs = %{
+        name: "Test Person",
+        type: "person",
+        owner_id: user.id,
+        country: "US",
+        timezone: "America/New_York",
+        nationality: "KR",
+        ethnicity: "Korean",
+        languages: ["en", "ko"],
+        preferred_language: "en"
+      }
+
+      assert {:ok, %Entity{} = entity} = Entities.create_entity(attrs)
+      assert entity.country == "US"
+      assert entity.timezone == "America/New_York"
+      assert entity.nationality == "KR"
+      assert entity.ethnicity == "Korean"
+      assert entity.languages == ["en", "ko"]
+      assert entity.preferred_language == "en"
+    end
+
+    test "update_entity/2 updates demographic fields" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+
+      attrs = %{
+        country: "GB",
+        timezone: "Europe/London",
+        ethnicity: "British Indian"
+      }
+
+      assert {:ok, updated} = Entities.update_entity(entity, attrs)
+      assert updated.country == "GB"
+      assert updated.timezone == "Europe/London"
+      assert updated.ethnicity == "British Indian"
+    end
+
     test "archive_entity/1 sets archived_at" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
