@@ -60,6 +60,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:adding_identifier, nil)
           |> assign(:editing_identifier, nil)
           |> assign(:adding_interaction, false)
+          |> assign(:editing_interaction, nil)
 
         {:ok, socket}
     end
@@ -501,6 +502,77 @@ defmodule ConeziaWeb.EntityLive.Show do
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to log interaction")}
+    end
+  end
+
+  def handle_event("edit_interaction", %{"id" => id}, socket) do
+    user = socket.assigns.current_user
+
+    case Interactions.get_interaction_for_user(id, user.id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Interaction not found")}
+
+      interaction ->
+        {:noreply,
+         socket
+         |> assign(:editing_interaction, interaction)
+         |> assign(:adding_interaction, false)}
+    end
+  end
+
+  def handle_event("cancel_edit_interaction", _params, socket) do
+    {:noreply, assign(socket, :editing_interaction, nil)}
+  end
+
+  def handle_event("update_interaction", %{"interaction" => params}, socket) do
+    user = socket.assigns.current_user
+    entity = socket.assigns.entity
+    interaction = socket.assigns.editing_interaction
+
+    attrs = %{
+      type: params["type"],
+      title: blank_to_nil(params["title"]),
+      content: params["content"],
+      occurred_at: parse_datetime(params["occurred_at"])
+    }
+
+    case Interactions.update_interaction(interaction, attrs) do
+      {:ok, _updated} ->
+        interactions = list_interactions(entity.id, user.id)
+
+        {:noreply,
+         socket
+         |> assign(:interactions, interactions)
+         |> assign(:editing_interaction, nil)
+         |> put_flash(:info, "Interaction updated successfully")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to update interaction")}
+    end
+  end
+
+  def handle_event("delete_interaction", %{"id" => id}, socket) do
+    user = socket.assigns.current_user
+    entity = socket.assigns.entity
+
+    case Interactions.get_interaction_for_user(id, user.id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Interaction not found")}
+
+      interaction ->
+        case Interactions.delete_interaction(interaction) do
+          {:ok, _} ->
+            interactions = list_interactions(entity.id, user.id)
+
+            {:noreply,
+             socket
+             |> assign(:interactions, interactions)
+             |> assign(:editing_interaction, nil)
+             |> put_flash(:info, "Interaction deleted")}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to delete interaction")}
+        end
     end
   end
 
@@ -1432,15 +1504,80 @@ defmodule ConeziaWeb.EntityLive.Show do
               </form>
             </div>
 
-            <div :if={@interactions == [] && !@adding_interaction} class="py-8">
+            <!-- Edit interaction form -->
+            <div :if={@editing_interaction} class="mb-4 p-4 bg-gray-50 rounded-lg">
+              <form phx-submit="update_interaction" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">Type</label>
+                    <select
+                      name="interaction[type]"
+                      required
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="call" selected={@editing_interaction.type == "call"}>Call</option>
+                      <option value="meeting" selected={@editing_interaction.type == "meeting"}>Meeting</option>
+                      <option value="message" selected={@editing_interaction.type == "message"}>Message</option>
+                      <option value="email" selected={@editing_interaction.type == "email"}>Email</option>
+                      <option value="transaction" selected={@editing_interaction.type == "transaction"}>Transaction</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">When</label>
+                    <input
+                      type="datetime-local"
+                      name="interaction[occurred_at]"
+                      value={format_datetime_local(@editing_interaction.occurred_at)}
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">Title (optional)</label>
+                  <input
+                    type="text"
+                    name="interaction[title]"
+                    value={@editing_interaction.title}
+                    placeholder="e.g., Catch-up call, Project discussion"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">Notes</label>
+                  <textarea
+                    name="interaction[content]"
+                    rows="3"
+                    required
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >{@editing_interaction.content}</textarea>
+                </div>
+                <div class="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    phx-click="cancel_edit_interaction"
+                    class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div :if={@interactions == [] && !@adding_interaction && !@editing_interaction} class="py-8">
               <.empty_state>
                 <:icon><span class="hero-chat-bubble-left-right h-10 w-10" /></:icon>
                 <:title>No interactions yet</:title>
                 <:description>Log your first call, meeting, or message with this connection.</:description>
               </.empty_state>
             </div>
-            <ul :if={@interactions != []} role="list" class="divide-y divide-gray-200">
-              <li :for={interaction <- @interactions} class="py-4">
+            <ul :if={@interactions != [] && !@editing_interaction} role="list" class="divide-y divide-gray-200">
+              <li :for={interaction <- @interactions} class="py-4 group">
                 <div class="flex items-start gap-3">
                   <span class={["flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center", interaction_type_bg(interaction.type)]}>
                     <.icon name={interaction_type_icon(interaction.type)} class="h-4 w-4 text-white" />
@@ -1452,6 +1589,25 @@ defmodule ConeziaWeb.EntityLive.Show do
                     </p>
                     <p :if={interaction.content} class="mt-1 text-sm text-gray-500 line-clamp-2">{interaction.content}</p>
                     <p class="mt-1 text-xs text-gray-400">{format_datetime(interaction.occurred_at)}</p>
+                  </div>
+                  <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      phx-click="edit_interaction"
+                      phx-value-id={interaction.id}
+                      title="Edit"
+                      class="p-1 text-gray-400 hover:text-indigo-600"
+                    >
+                      <.icon name="hero-pencil" class="h-4 w-4" />
+                    </button>
+                    <button
+                      phx-click="delete_interaction"
+                      phx-value-id={interaction.id}
+                      data-confirm="Delete this interaction?"
+                      title="Delete"
+                      class="p-1 text-gray-400 hover:text-red-600"
+                    >
+                      <.icon name="hero-trash" class="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               </li>
