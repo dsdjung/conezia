@@ -1,6 +1,12 @@
 defmodule Conezia.Interactions.Interaction do
   @moduledoc """
-  Interaction schema for notes, meetings, calls, and other recorded interactions.
+  Interaction schema for recording communication history with connections.
+
+  Interactions represent stored records of communication events - calls, meetings,
+  emails, and messages. This forms the history timeline of interactions with a connection.
+
+  Note: This is distinct from the UI concept of "Activity" which combines
+  stored Interactions with on-demand data fetched from external APIs (Gmail, Calendar).
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -8,7 +14,7 @@ defmodule Conezia.Interactions.Interaction do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @interaction_types ~w(note meeting call transaction event document other)
+  @interaction_types ~w(email call meeting message)
 
   schema "interactions" do
     field :type, :string

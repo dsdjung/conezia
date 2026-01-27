@@ -170,13 +170,13 @@ defmodule Conezia.Interactions do
   end
 
   @doc """
-  Get the most recent event or meeting interaction for an entity.
-  Returns nil if no calendar events exist.
+  Get the most recent meeting or call interaction for an entity.
+  Returns nil if no meetings or calls exist.
   """
   def get_last_event_for_entity(entity_id, user_id) do
     from(i in Interaction,
       where: i.entity_id == ^entity_id and i.user_id == ^user_id,
-      where: i.type in ["event", "meeting"],
+      where: i.type in ["meeting", "call"],
       order_by: [desc: i.occurred_at],
       limit: 1
     )

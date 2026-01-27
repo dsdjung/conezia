@@ -59,6 +59,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:filtered_merge_candidates, [])
           |> assign(:adding_identifier, nil)
           |> assign(:editing_identifier, nil)
+          |> assign(:adding_interaction, false)
 
         {:ok, socket}
     end
@@ -464,6 +465,43 @@ defmodule ConeziaWeb.EntityLive.Show do
 
   def handle_event("toggle_archived_identifiers", _params, socket) do
     {:noreply, assign(socket, :show_archived_identifiers, !socket.assigns.show_archived_identifiers)}
+  end
+
+  # Interaction logging events
+  def handle_event("add_interaction", _params, socket) do
+    {:noreply, assign(socket, :adding_interaction, true)}
+  end
+
+  def handle_event("cancel_add_interaction", _params, socket) do
+    {:noreply, assign(socket, :adding_interaction, false)}
+  end
+
+  def handle_event("save_interaction", %{"interaction" => params}, socket) do
+    user = socket.assigns.current_user
+    entity = socket.assigns.entity
+
+    attrs = %{
+      user_id: user.id,
+      entity_id: entity.id,
+      type: params["type"],
+      title: blank_to_nil(params["title"]),
+      content: params["content"],
+      occurred_at: parse_datetime(params["occurred_at"])
+    }
+
+    case Interactions.create_interaction(attrs) do
+      {:ok, _interaction} ->
+        interactions = list_interactions(entity.id, user.id)
+
+        {:noreply,
+         socket
+         |> assign(:interactions, interactions)
+         |> assign(:adding_interaction, false)
+         |> put_flash(:info, "Interaction logged successfully")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to log interaction")}
+    end
   end
 
   @impl true
@@ -1318,23 +1356,100 @@ defmodule ConeziaWeb.EntityLive.Show do
           <.card>
             <:header>
               <div class="flex items-center justify-between">
-                <span>Recent Interactions</span>
+                <span>Interaction History</span>
+                <button
+                  :if={!@adding_interaction}
+                  phx-click="add_interaction"
+                  class="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                >
+                  Log Interaction →
+                </button>
               </div>
             </:header>
-            <div :if={@interactions == []} class="py-8">
+
+            <!-- Add interaction form -->
+            <div :if={@adding_interaction} class="mb-4 p-4 bg-gray-50 rounded-lg">
+              <form phx-submit="save_interaction" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">Type</label>
+                    <select
+                      name="interaction[type]"
+                      required
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="call">Call</option>
+                      <option value="meeting">Meeting</option>
+                      <option value="message">Message</option>
+                      <option value="email">Email</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700">When</label>
+                    <input
+                      type="datetime-local"
+                      name="interaction[occurred_at]"
+                      value={format_datetime_local(DateTime.utc_now())}
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">Title (optional)</label>
+                  <input
+                    type="text"
+                    name="interaction[title]"
+                    placeholder="e.g., Catch-up call, Project discussion"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700">Notes</label>
+                  <textarea
+                    name="interaction[content]"
+                    rows="3"
+                    required
+                    placeholder="What did you discuss? Key takeaways..."
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  ></textarea>
+                </div>
+                <div class="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    phx-click="cancel_add_interaction"
+                    class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                  >
+                    Log Interaction
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div :if={@interactions == [] && !@adding_interaction} class="py-8">
               <.empty_state>
                 <:icon><span class="hero-chat-bubble-left-right h-10 w-10" /></:icon>
                 <:title>No interactions yet</:title>
-                <:description>Record your first interaction with this connection.</:description>
+                <:description>Log your first call, meeting, or message with this connection.</:description>
               </.empty_state>
             </div>
             <ul :if={@interactions != []} role="list" class="divide-y divide-gray-200">
               <li :for={interaction <- @interactions} class="py-4">
                 <div class="flex items-start gap-3">
-                  <span class={["hero-chat-bubble-left h-6 w-6 mt-0.5", interaction_type_color(interaction.type)]} />
+                  <span class={["flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center", interaction_type_bg(interaction.type)]}>
+                    <.icon name={interaction_type_icon(interaction.type)} class="h-4 w-4 text-white" />
+                  </span>
                   <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-gray-900">{interaction.type}</p>
-                    <p :if={interaction.notes} class="mt-1 text-sm text-gray-500">{interaction.notes}</p>
+                    <p class="text-sm font-medium text-gray-900">
+                      {String.capitalize(interaction.type)}
+                      <span :if={interaction.title} class="font-normal text-gray-600"> - {interaction.title}</span>
+                    </p>
+                    <p :if={interaction.content} class="mt-1 text-sm text-gray-500 line-clamp-2">{interaction.content}</p>
                     <p class="mt-1 text-xs text-gray-400">{format_datetime(interaction.occurred_at)}</p>
                   </div>
                 </div>
@@ -1578,11 +1693,17 @@ defmodule ConeziaWeb.EntityLive.Show do
 
   defp health_status(_), do: :unknown
 
-  defp interaction_type_color("call"), do: "text-green-500"
-  defp interaction_type_color("email"), do: "text-blue-500"
-  defp interaction_type_color("meeting"), do: "text-purple-500"
-  defp interaction_type_color("message"), do: "text-indigo-500"
-  defp interaction_type_color(_), do: "text-gray-500"
+  defp interaction_type_bg("call"), do: "bg-green-500"
+  defp interaction_type_bg("email"), do: "bg-red-500"
+  defp interaction_type_bg("meeting"), do: "bg-purple-500"
+  defp interaction_type_bg("message"), do: "bg-indigo-500"
+  defp interaction_type_bg(_), do: "bg-gray-500"
+
+  defp interaction_type_icon("call"), do: "hero-phone"
+  defp interaction_type_icon("email"), do: "hero-envelope"
+  defp interaction_type_icon("meeting"), do: "hero-users"
+  defp interaction_type_icon("message"), do: "hero-chat-bubble-left"
+  defp interaction_type_icon(_), do: "hero-chat-bubble-left-right"
 
   defp reminder_type_color("follow_up"), do: :blue
   defp reminder_type_color("birthday"), do: :indigo
@@ -1603,6 +1724,10 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp format_datetime(nil), do: "Not set"
   defp format_datetime(datetime) do
     Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
+  end
+
+  defp format_datetime_local(datetime) do
+    Calendar.strftime(datetime, "%Y-%m-%dT%H:%M")
   end
 
   defp relationship_type_color("family"), do: :pink
@@ -1706,6 +1831,21 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp identifier_placeholder("email"), do: "name@example.com"
   defp identifier_placeholder("phone"), do: "+1 (555) 123-4567"
   defp identifier_placeholder(_), do: "Value"
+
+  defp parse_datetime(nil), do: nil
+  defp parse_datetime(""), do: nil
+  defp parse_datetime(datetime_string) do
+    # Handle datetime-local input format (YYYY-MM-DDTHH:MM)
+    case DateTime.from_iso8601(datetime_string <> ":00Z") do
+      {:ok, datetime, _} -> datetime
+      _ ->
+        # Try parsing as date only
+        case Date.from_iso8601(datetime_string) do
+          {:ok, date} -> DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+          _ -> nil
+        end
+    end
+  end
 
   # Communication channel styling helpers
   defp communication_channel_icon("email"), do: "hero-envelope"

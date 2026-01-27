@@ -58,8 +58,8 @@ defmodule Conezia.InteractionsTest do
       user = insert(:user)
       entity = insert(:entity, owner: user)
       attrs = %{
-        type: "note",
-        content: "Test note content",
+        type: "call",
+        content: "Discussed project updates",
         user_id: user.id,
         entity_id: entity.id
       }
@@ -67,17 +67,17 @@ defmodule Conezia.InteractionsTest do
       assert {:ok, %Interaction{}} = Interactions.create_interaction(attrs)
     end
 
-    test "get_last_event_for_entity/2 returns most recent event or meeting" do
+    test "get_last_event_for_entity/2 returns most recent meeting or call" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
 
       old_time = DateTime.add(DateTime.utc_now(), -3600, :second)
       recent_time = DateTime.utc_now()
 
-      # Create a note (should not be returned)
-      _note = insert(:interaction, user: user, entity: entity, type: "note", occurred_at: recent_time)
-      # Create an old event
-      _old_event = insert(:interaction, user: user, entity: entity, type: "event", occurred_at: old_time)
+      # Create an email (should not be returned)
+      _email = insert(:interaction, user: user, entity: entity, type: "email", occurred_at: recent_time)
+      # Create an old call
+      _old_call = insert(:interaction, user: user, entity: entity, type: "call", occurred_at: old_time)
       # Create a recent meeting (should be returned)
       recent_meeting = insert(:interaction, user: user, entity: entity, type: "meeting", occurred_at: recent_time)
 
@@ -85,11 +85,11 @@ defmodule Conezia.InteractionsTest do
       assert result.id == recent_meeting.id
     end
 
-    test "get_last_event_for_entity/2 returns nil when no events or meetings" do
+    test "get_last_event_for_entity/2 returns nil when no meetings or calls" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
-      # Create only a note
-      insert(:interaction, user: user, entity: entity, type: "note")
+      # Create only an email (not a meeting or call)
+      insert(:interaction, user: user, entity: entity, type: "email")
 
       assert is_nil(Interactions.get_last_event_for_entity(entity.id, user.id))
     end

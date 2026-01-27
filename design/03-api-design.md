@@ -441,7 +441,7 @@ GET /api/v1/entities/:id
       {"id": "...", "name": "Tech Industry"}
     ],
     "recent_interactions": [
-      {"id": "...", "type": "note", "title": "Caught up over coffee", "occurred_at": "2024-06-15T14:30:00Z"}
+      {"id": "...", "type": "meeting", "title": "Caught up over coffee", "occurred_at": "2024-06-15T14:30:00Z"}
     ],
     "inserted_at": "2024-01-10T08:00:00Z",
     "updated_at": "2024-06-15T14:30:00Z"
@@ -1218,7 +1218,7 @@ GET /api/v1/search
     "interactions": [
       {
         "id": "...",
-        "type": "note",
+        "type": "meeting",
         "title": "Meeting with Alice",
         "entity": {"id": "...", "name": "Alice Johnson"},
         "match_context": "...discussed Alice's new project...",
@@ -1297,7 +1297,7 @@ GET /api/v1/interactions
 GET /api/v1/interactions/:id
 ```
 
-### 11.3 Create Interaction (Note)
+### 11.3 Create Interaction
 
 ```
 POST /api/v1/interactions
@@ -1307,19 +1307,21 @@ POST /api/v1/interactions
 ```json
 {
   "entity_id": "entity-uuid",
-  "type": "note",
+  "type": "call",
   "title": "Quick check-in call",
   "content": "Called to see how the new project is going. They mentioned...",
   "occurred_at": "2024-06-20T10:30:00Z"
 }
 ```
 
+Valid interaction types: `email`, `call`, `meeting`, `message`
+
 **Response (201):**
 ```json
 {
   "data": {
     "id": "new-interaction-uuid",
-    "type": "note",
+    "type": "call",
     "title": "Quick check-in call",
     "content": "...",
     "occurred_at": "2024-06-20T10:30:00Z",
