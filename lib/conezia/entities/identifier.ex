@@ -49,16 +49,24 @@ defmodule Conezia.Entities.Identifier do
     type = get_field(changeset, :type)
     value = get_change(changeset, :value)
 
-    if value do
-      case type do
-        "phone" -> validate_phone(changeset, value)
-        "email" -> validate_email(changeset, value)
-        "ssn" -> validate_ssn(changeset, value)
-        "website" -> validate_url(changeset, value)
-        _ -> changeset
-      end
-    else
-      add_error(changeset, :value, "is required")
+    cond do
+      # Value is being changed - validate format
+      value ->
+        case type do
+          "phone" -> validate_phone(changeset, value)
+          "email" -> validate_email(changeset, value)
+          "ssn" -> validate_ssn(changeset, value)
+          "website" -> validate_url(changeset, value)
+          _ -> changeset
+        end
+
+      # New record with no value - require it
+      is_nil(get_field(changeset, :value)) and is_nil(get_field(changeset, :value_hash)) ->
+        add_error(changeset, :value, "is required")
+
+      # Existing record, value not being changed - skip validation
+      true ->
+        changeset
     end
   end
 
