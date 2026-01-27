@@ -9,6 +9,7 @@ defmodule Conezia.Factory do
   alias Conezia.Interactions.Interaction
   alias Conezia.Communications.{Conversation, Communication}
   alias Conezia.Reminders.Reminder
+  alias Conezia.Gifts.Gift
   alias Conezia.Attachments.Attachment
   alias Conezia.ExternalAccounts.ExternalAccount
   alias Conezia.Imports.ImportJob
@@ -199,6 +200,20 @@ defmodule Conezia.Factory do
       total_records: 0,
       processed_records: 0,
       user: build(:user)
+    }
+  end
+
+  # Gift factories
+
+  def gift_factory do
+    %Gift{
+      name: sequence(:gift_name, &"Gift #{&1}"),
+      status: "idea",
+      occasion: "birthday",
+      occasion_date: Date.add(Date.utc_today(), 30),
+      budget_cents: 5000,
+      user: build(:user),
+      entity: build(:entity)
     }
   end
 

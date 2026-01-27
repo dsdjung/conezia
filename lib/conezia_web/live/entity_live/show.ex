@@ -9,6 +9,7 @@ defmodule ConeziaWeb.EntityLive.Show do
   alias Conezia.Interactions
   alias Conezia.Reminders
   alias Conezia.Communications
+  alias Conezia.Gifts
   alias Conezia.Integrations.Gmail
 
   @impl true
@@ -572,6 +573,29 @@ defmodule ConeziaWeb.EntityLive.Show do
 
           {:error, _} ->
             {:noreply, put_flash(socket, :error, "Failed to delete interaction")}
+        end
+    end
+  end
+
+  def handle_event("advance_gift_status", %{"id" => id}, socket) do
+    user = socket.assigns.current_user
+
+    case Gifts.get_gift_for_user(id, user.id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Gift not found")}
+
+      gift ->
+        next = next_gift_status(gift.status)
+
+        case Gifts.update_gift_status(gift, next) do
+          {:ok, _} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Gift marked as #{next}")
+             |> push_patch(to: ~p"/connections/#{socket.assigns.entity.id}")}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to update gift")}
         end
     end
   end
@@ -1722,6 +1746,16 @@ defmodule ConeziaWeb.EntityLive.Show do
               </li>
             </ul>
           </.card>
+
+          <!-- Gifts Section -->
+          <.card>
+            <.live_component
+              module={ConeziaWeb.EntityLive.GiftSectionComponent}
+              id="gift-section"
+              entity={@entity}
+              current_user={@current_user}
+            />
+          </.card>
         </div>
       </div>
 
@@ -2038,6 +2072,12 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp communication_channel_bg("telegram"), do: "bg-blue-500"
   defp communication_channel_bg("phone"), do: "bg-indigo-500"
   defp communication_channel_bg(_), do: "bg-gray-500"
+
+  # Gift helpers
+  defp next_gift_status("idea"), do: "purchased"
+  defp next_gift_status("purchased"), do: "wrapped"
+  defp next_gift_status("wrapped"), do: "given"
+  defp next_gift_status(_), do: "idea"
 
   # Demographic display helpers
   defp country_name(nil), do: ""

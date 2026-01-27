@@ -8,7 +8,7 @@ defmodule Conezia.Reminders.Reminder do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @reminder_types ~w(follow_up birthday anniversary custom health_alert event)
+  @reminder_types ~w(follow_up birthday anniversary custom health_alert event gift)
   @notification_channels ~w(in_app email push)
 
   schema "reminders" do
