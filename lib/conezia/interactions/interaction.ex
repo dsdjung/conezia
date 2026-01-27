@@ -14,7 +14,7 @@ defmodule Conezia.Interactions.Interaction do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @interaction_types ~w(email call meeting message)
+  @interaction_types ~w(email call meeting message transaction)
 
   schema "interactions" do
     field :type, :string

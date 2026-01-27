@@ -1382,6 +1382,7 @@ defmodule ConeziaWeb.EntityLive.Show do
                       <option value="meeting">Meeting</option>
                       <option value="message">Message</option>
                       <option value="email">Email</option>
+                      <option value="transaction">Transaction</option>
                     </select>
                   </div>
                   <div>
@@ -1697,12 +1698,14 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp interaction_type_bg("email"), do: "bg-red-500"
   defp interaction_type_bg("meeting"), do: "bg-purple-500"
   defp interaction_type_bg("message"), do: "bg-indigo-500"
+  defp interaction_type_bg("transaction"), do: "bg-yellow-500"
   defp interaction_type_bg(_), do: "bg-gray-500"
 
   defp interaction_type_icon("call"), do: "hero-phone"
   defp interaction_type_icon("email"), do: "hero-envelope"
   defp interaction_type_icon("meeting"), do: "hero-users"
   defp interaction_type_icon("message"), do: "hero-chat-bubble-left"
+  defp interaction_type_icon("transaction"), do: "hero-currency-dollar"
   defp interaction_type_icon(_), do: "hero-chat-bubble-left-right"
 
   defp reminder_type_color("follow_up"), do: :blue
