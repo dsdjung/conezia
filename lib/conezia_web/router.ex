@@ -79,6 +79,9 @@ defmodule ConeziaWeb.Router do
       live "/reminders", ReminderLive.Index, :index
       live "/reminders/new", ReminderLive.Index, :new
       live "/reminders/:id/edit", ReminderLive.Index, :edit
+      live "/events", EventLive.Index, :index
+      live "/events/new", EventLive.Index, :new
+      live "/events/:id/edit", EventLive.Index, :edit
       live "/gifts", GiftLive.Index, :index
       live "/gifts/new", GiftLive.Index, :new
       live "/gifts/:id/edit", GiftLive.Index, :edit

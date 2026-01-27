@@ -10,6 +10,7 @@ defmodule ConeziaWeb.EntityLive.Show do
   alias Conezia.Reminders
   alias Conezia.Communications
   alias Conezia.Gifts
+  alias Conezia.Events
   alias Conezia.Integrations.Gmail
 
   @impl true
@@ -46,6 +47,7 @@ defmodule ConeziaWeb.EntityLive.Show do
           |> assign(:archived_identifiers, archived_identifiers)
           |> assign(:show_archived_identifiers, false)
           |> assign(:interactions, list_interactions(entity.id, user.id))
+          |> assign(:entity_events, Events.list_events_for_entity(entity.id, user.id, limit: 10))
           |> assign(:reminders, list_reminders(entity.id, user.id))
           |> assign(:last_communication, last_communication)
           |> assign(:last_event, last_event)
@@ -1752,6 +1754,41 @@ defmodule ConeziaWeb.EntityLive.Show do
             </ul>
           </.card>
 
+          <!-- Events Section -->
+          <.card>
+            <:header>
+              <div class="flex items-center justify-between">
+                <span>Events</span>
+                <.link navigate={~p"/events/new"} class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                  Add →
+                </.link>
+              </div>
+            </:header>
+            <div :if={@entity_events == []} class="py-8">
+              <.empty_state>
+                <:icon><span class="hero-calendar-days h-10 w-10" /></:icon>
+                <:title>No events</:title>
+                <:description>Create an event linked to this connection.</:description>
+              </.empty_state>
+            </div>
+            <ul :if={@entity_events != []} role="list" class="divide-y divide-gray-200">
+              <li :for={event <- @entity_events} class="py-3">
+                <div class="flex items-center justify-between">
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium text-gray-900">{event.title}</p>
+                    <p class="text-xs text-gray-500">
+                      {format_event_datetime(event.starts_at, event.all_day)}
+                      <span :if={event.location} class="ml-1">· {event.location}</span>
+                    </p>
+                  </div>
+                  <.badge color={event_type_color(event.type)}>
+                    {humanize_type(event.type)}
+                  </.badge>
+                </div>
+              </li>
+            </ul>
+          </.card>
+
           <!-- Gifts Section -->
           <.card>
             <.live_component
@@ -1920,6 +1957,17 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp interaction_type_icon("message"), do: "hero-chat-bubble-left"
   defp interaction_type_icon("transaction"), do: "hero-currency-dollar"
   defp interaction_type_icon(_), do: "hero-chat-bubble-left-right"
+
+  defp event_type_color("birthday"), do: :red
+  defp event_type_color("anniversary"), do: :indigo
+  defp event_type_color("holiday"), do: :red
+  defp event_type_color("meeting"), do: :blue
+  defp event_type_color("dinner"), do: :yellow
+  defp event_type_color("party"), do: :green
+  defp event_type_color(_), do: :gray
+
+  defp format_event_datetime(datetime, true), do: Calendar.strftime(datetime, "%b %d, %Y")
+  defp format_event_datetime(datetime, _), do: Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
 
   defp reminder_type_color("follow_up"), do: :blue
   defp reminder_type_color("birthday"), do: :indigo

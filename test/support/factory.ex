@@ -13,6 +13,7 @@ defmodule Conezia.Factory do
   alias Conezia.Attachments.Attachment
   alias Conezia.ExternalAccounts.ExternalAccount
   alias Conezia.Imports.ImportJob
+  alias Conezia.Events.{Event, EventEntity}
   alias Conezia.Platform.{Application, ApplicationUser, Webhook, WebhookDelivery}
 
   # User factories
@@ -243,6 +244,27 @@ defmodule Conezia.Factory do
       budget_cents: 5000,
       user: build(:user),
       entity: build(:entity)
+    }
+  end
+
+  # Event factories
+
+  def event_factory do
+    %Event{
+      title: sequence(:event_title, &"Event #{&1}"),
+      type: "meeting",
+      starts_at: DateTime.add(DateTime.utc_now(), 86400, :second),
+      all_day: false,
+      is_recurring: false,
+      user: build(:user)
+    }
+  end
+
+  def event_entity_factory do
+    %EventEntity{
+      event: build(:event),
+      entity: build(:entity),
+      role: "attendee"
     }
   end
 
