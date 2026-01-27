@@ -675,6 +675,24 @@ defmodule ConeziaWeb.EntityLive.Show do
               <:item :if={@relationship} title="Relationship">
                 {relationship_display_label(@relationship)}
               </:item>
+              <:item :if={@entity.country} title="Country">
+                {country_name(@entity.country)}
+              </:item>
+              <:item :if={@entity.timezone} title="Timezone">
+                {timezone_display(@entity.timezone)}
+              </:item>
+              <:item :if={@entity.nationality} title="Nationality">
+                {country_name(@entity.nationality)}
+              </:item>
+              <:item :if={@entity.ethnicity} title="Ethnicity">
+                {@entity.ethnicity}
+              </:item>
+              <:item :if={@entity.preferred_language} title="Preferred Language">
+                {language_name(@entity.preferred_language)}
+              </:item>
+              <:item :if={@entity.languages != []} title="Languages">
+                {Enum.map_join(@entity.languages, ", ", &language_name/1)}
+              </:item>
               <:item :if={@entity.last_interaction_at} title="Last Interaction">
                 {format_datetime(@entity.last_interaction_at)}
               </:item>
@@ -2020,4 +2038,162 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp communication_channel_bg("telegram"), do: "bg-blue-500"
   defp communication_channel_bg("phone"), do: "bg-indigo-500"
   defp communication_channel_bg(_), do: "bg-gray-500"
+
+  # Demographic display helpers
+  defp country_name(nil), do: ""
+  defp country_name(code) do
+    countries()
+    |> Enum.find(fn {_, c} -> c == code end)
+    |> case do
+      {name, _} -> name
+      nil -> code
+    end
+  end
+
+  defp timezone_display(nil), do: ""
+  defp timezone_display(tz) do
+    timezones()
+    |> Enum.find(fn {_, t} -> t == tz end)
+    |> case do
+      {name, _} -> name
+      nil -> tz
+    end
+  end
+
+  defp language_name(nil), do: ""
+  defp language_name(code) do
+    languages()
+    |> Enum.find(fn {_, c} -> c == code end)
+    |> case do
+      {name, _} -> name
+      nil -> code
+    end
+  end
+
+  defp countries do
+    [
+      {"Afghanistan", "AF"},
+      {"Argentina", "AR"},
+      {"Australia", "AU"},
+      {"Austria", "AT"},
+      {"Bangladesh", "BD"},
+      {"Belgium", "BE"},
+      {"Brazil", "BR"},
+      {"Cambodia", "KH"},
+      {"Canada", "CA"},
+      {"Chile", "CL"},
+      {"China", "CN"},
+      {"Colombia", "CO"},
+      {"Czech Republic", "CZ"},
+      {"Denmark", "DK"},
+      {"Egypt", "EG"},
+      {"Ethiopia", "ET"},
+      {"Finland", "FI"},
+      {"France", "FR"},
+      {"Germany", "DE"},
+      {"Ghana", "GH"},
+      {"Greece", "GR"},
+      {"Hong Kong", "HK"},
+      {"Hungary", "HU"},
+      {"India", "IN"},
+      {"Indonesia", "ID"},
+      {"Ireland", "IE"},
+      {"Israel", "IL"},
+      {"Italy", "IT"},
+      {"Japan", "JP"},
+      {"Kenya", "KE"},
+      {"Malaysia", "MY"},
+      {"Mexico", "MX"},
+      {"Morocco", "MA"},
+      {"Myanmar", "MM"},
+      {"Nepal", "NP"},
+      {"Netherlands", "NL"},
+      {"New Zealand", "NZ"},
+      {"Nigeria", "NG"},
+      {"Norway", "NO"},
+      {"Pakistan", "PK"},
+      {"Peru", "PE"},
+      {"Philippines", "PH"},
+      {"Poland", "PL"},
+      {"Portugal", "PT"},
+      {"Romania", "RO"},
+      {"Russia", "RU"},
+      {"Saudi Arabia", "SA"},
+      {"Singapore", "SG"},
+      {"South Africa", "ZA"},
+      {"South Korea", "KR"},
+      {"Spain", "ES"},
+      {"Sri Lanka", "LK"},
+      {"Sweden", "SE"},
+      {"Switzerland", "CH"},
+      {"Taiwan", "TW"},
+      {"Thailand", "TH"},
+      {"Turkey", "TR"},
+      {"Ukraine", "UA"},
+      {"United Arab Emirates", "AE"},
+      {"United Kingdom", "GB"},
+      {"United States", "US"},
+      {"Vietnam", "VN"}
+    ]
+  end
+
+  defp timezones do
+    [
+      {"Pacific Time (US)", "America/Los_Angeles"},
+      {"Mountain Time (US)", "America/Denver"},
+      {"Central Time (US)", "America/Chicago"},
+      {"Eastern Time (US)", "America/New_York"},
+      {"London (GMT/BST)", "Europe/London"},
+      {"Paris (CET/CEST)", "Europe/Paris"},
+      {"Berlin (CET/CEST)", "Europe/Berlin"},
+      {"Tokyo (JST)", "Asia/Tokyo"},
+      {"Seoul (KST)", "Asia/Seoul"},
+      {"Shanghai (CST)", "Asia/Shanghai"},
+      {"Hong Kong (HKT)", "Asia/Hong_Kong"},
+      {"Singapore (SGT)", "Asia/Singapore"},
+      {"Sydney (AEST/AEDT)", "Australia/Sydney"},
+      {"Auckland (NZST/NZDT)", "Pacific/Auckland"},
+      {"Mumbai (IST)", "Asia/Kolkata"},
+      {"Dubai (GST)", "Asia/Dubai"},
+      {"São Paulo (BRT)", "America/Sao_Paulo"},
+      {"Toronto (EST/EDT)", "America/Toronto"},
+      {"Vancouver (PST/PDT)", "America/Vancouver"},
+      {"UTC", "Etc/UTC"}
+    ]
+  end
+
+  defp languages do
+    [
+      {"Arabic", "ar"},
+      {"Chinese (Simplified)", "zh-Hans"},
+      {"Chinese (Traditional)", "zh-Hant"},
+      {"Czech", "cs"},
+      {"Danish", "da"},
+      {"Dutch", "nl"},
+      {"English", "en"},
+      {"Finnish", "fi"},
+      {"French", "fr"},
+      {"German", "de"},
+      {"Greek", "el"},
+      {"Hebrew", "he"},
+      {"Hindi", "hi"},
+      {"Hungarian", "hu"},
+      {"Indonesian", "id"},
+      {"Italian", "it"},
+      {"Japanese", "ja"},
+      {"Korean", "ko"},
+      {"Malay", "ms"},
+      {"Norwegian", "no"},
+      {"Polish", "pl"},
+      {"Portuguese", "pt"},
+      {"Romanian", "ro"},
+      {"Russian", "ru"},
+      {"Spanish", "es"},
+      {"Swedish", "sv"},
+      {"Tagalog", "tl"},
+      {"Thai", "th"},
+      {"Turkish", "tr"},
+      {"Vietnamese", "vi"}
+    ]
+  end
 end
