@@ -143,7 +143,7 @@ defmodule Conezia.Imports.DeletedImportTest do
       )
 
       # Add an email identifier
-      insert(:identifier, entity: entity, type: "email", value: "test@example.com")
+      insert_encrypted_identifier(entity: entity, type: "email", value: "test@example.com")
 
       # Delete the entity
       {:ok, _} = Entities.delete_entity(entity)

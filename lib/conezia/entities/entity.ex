@@ -14,6 +14,7 @@ defmodule Conezia.Entities.Entity do
     field :type, :string
     field :name, :string
     field :description, :string
+    field :description_encrypted, Conezia.Encrypted.Binary
     field :avatar_url, :string
     field :metadata, :map, default: %{}
     field :last_interaction_at, :utc_datetime_usec
@@ -62,7 +63,21 @@ defmodule Conezia.Entities.Entity do
     |> validate_length(:preferred_language, max: 8)
     |> validate_url(:avatar_url)
     |> foreign_key_constraint(:owner_id)
+    |> encrypt_description()
   end
+
+  defp encrypt_description(changeset) do
+    case get_change(changeset, :description) do
+      nil -> changeset
+      description -> put_change(changeset, :description_encrypted, description)
+    end
+  end
+
+  @doc """
+  Returns the decrypted description, falling back to plaintext field.
+  """
+  def decrypted_description(%__MODULE__{description_encrypted: enc}) when not is_nil(enc), do: enc
+  def decrypted_description(%__MODULE__{description: desc}), do: desc
 
   def archive_changeset(entity) do
     change(entity, archived_at: DateTime.utc_now())

@@ -15,7 +15,9 @@ defmodule Conezia.Communications.Communication do
     field :channel, :string
     field :direction, :string
     field :subject, :string
+    field :subject_encrypted, Conezia.Encrypted.Binary
     field :content, :string
+    field :content_encrypted, Conezia.Encrypted.Binary
     field :attachments, {:array, :map}, default: []
     field :metadata, :map, default: %{}
     field :sent_at, :utc_datetime_usec
@@ -40,9 +42,23 @@ defmodule Conezia.Communications.Communication do
     |> validate_inclusion(:direction, @directions)
     |> validate_length(:content, min: 1, max: 100_000)
     |> validate_attachments()
+    |> encrypt_fields()
     |> foreign_key_constraint(:conversation_id)
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:entity_id)
+  end
+
+  defp encrypt_fields(changeset) do
+    changeset
+    |> maybe_encrypt(:subject, :subject_encrypted)
+    |> maybe_encrypt(:content, :content_encrypted)
+  end
+
+  defp maybe_encrypt(changeset, field, encrypted_field) do
+    case get_change(changeset, field) do
+      nil -> changeset
+      value -> put_change(changeset, encrypted_field, value)
+    end
   end
 
   defp validate_attachments(changeset) do

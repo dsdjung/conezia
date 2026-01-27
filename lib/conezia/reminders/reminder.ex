@@ -14,7 +14,9 @@ defmodule Conezia.Reminders.Reminder do
   schema "reminders" do
     field :type, :string
     field :title, :string
+    field :title_encrypted, Conezia.Encrypted.Binary
     field :description, :string
+    field :description_encrypted, Conezia.Encrypted.Binary
     field :due_at, :utc_datetime_usec
     field :recurrence_rule, :map
     field :notification_channels, {:array, :string}, default: ["in_app"]
@@ -39,8 +41,22 @@ defmodule Conezia.Reminders.Reminder do
     |> validate_length(:description, max: 2000)
     |> validate_notification_channels()
     |> validate_recurrence_rule()
+    |> encrypt_fields()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:entity_id)
+  end
+
+  defp encrypt_fields(changeset) do
+    changeset
+    |> maybe_encrypt(:title, :title_encrypted)
+    |> maybe_encrypt(:description, :description_encrypted)
+  end
+
+  defp maybe_encrypt(changeset, field, encrypted_field) do
+    case get_change(changeset, field) do
+      nil -> changeset
+      value -> put_change(changeset, encrypted_field, value)
+    end
   end
 
   def snooze_changeset(reminder, until) do

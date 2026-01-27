@@ -105,11 +105,10 @@ defmodule Conezia.Entities.Identifier do
   end
 
   defp encrypt_sensitive_value(changeset) do
-    type = get_field(changeset, :type)
     value = get_change(changeset, :value)
 
-    if type in @sensitive_types and value do
-      # Encrypt sensitive values (SSN, government_id, account_number) using Vault
+    if value do
+      # Encrypt ALL identifier values using Vault
       encrypted = Conezia.Vault.encrypt(value)
 
       changeset
@@ -121,16 +120,28 @@ defmodule Conezia.Entities.Identifier do
   end
 
   @doc """
-  Decrypt the sensitive value from an identifier.
-  Returns nil for non-sensitive types or if decryption fails.
+  Decrypt the value from an identifier.
+  Returns decrypted value from value_encrypted, or falls back to plaintext value.
   """
-  def decrypt_value(%__MODULE__{type: type, value_encrypted: encrypted}) when type in @sensitive_types do
+  def decrypt_value(%__MODULE__{value_encrypted: encrypted}) when not is_nil(encrypted) do
     case Conezia.Vault.decrypt(encrypted) do
       {:ok, plaintext} -> plaintext
       {:error, _} -> nil
     end
   end
   def decrypt_value(%__MODULE__{value: value}), do: value
+
+  @doc """
+  Populates the `value` field from `value_encrypted` for display purposes.
+  Call this after loading identifiers from the database.
+  """
+  def with_decrypted_value(%__MODULE__{} = identifier) do
+    %{identifier | value: decrypt_value(identifier)}
+  end
+
+  def with_decrypted_values(identifiers) when is_list(identifiers) do
+    Enum.map(identifiers, &with_decrypted_value/1)
+  end
 
   defp hash_value_for_duplicate_detection(changeset) do
     type = get_field(changeset, :type)

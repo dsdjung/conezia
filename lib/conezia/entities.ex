@@ -134,10 +134,11 @@ defmodule Conezia.Entities do
   defp record_deleted_external_ids(entity) do
     # Load identifiers to get email for recording
     entity = Repo.preload(entity, :identifiers)
+    identifiers = Identifier.with_decrypted_values(entity.identifiers)
 
     # Get email from identifiers
     entity_email =
-      entity.identifiers
+      identifiers
       |> Enum.find(fn i -> i.type == "email" end)
       |> case do
         nil -> nil
@@ -225,10 +226,16 @@ defmodule Conezia.Entities do
 
     count = Enum.reduce(identifiers, 0, fn identifier, acc ->
       # Check if target already has this exact identifier (same type and value)
-      existing_identifier = Repo.one(
-        from i in Identifier,
-          where: i.entity_id == ^target.id and i.type == ^identifier.type and i.value == ^identifier.value
-      )
+      # Use blind index hash for lookup (values are encrypted)
+      id_value = Identifier.decrypt_value(identifier)
+      id_hash = if id_value, do: Conezia.Vault.blind_index(id_value, "identifier_#{identifier.type}"), else: nil
+
+      existing_identifier = if id_hash do
+        Repo.one(
+          from i in Identifier,
+            where: i.entity_id == ^target.id and i.type == ^identifier.type and i.value_hash == ^id_hash
+        )
+      end
 
       if existing_identifier do
         # Identifier already exists on target, just delete from source
@@ -358,15 +365,21 @@ defmodule Conezia.Entities do
 
   # Identifier functions
 
-  def get_identifier(id), do: Repo.get(Identifier, id)
+  def get_identifier(id) do
+    case Repo.get(Identifier, id) do
+      nil -> nil
+      identifier -> Identifier.with_decrypted_value(identifier)
+    end
+  end
 
-  def get_identifier!(id), do: Repo.get!(Identifier, id)
+  def get_identifier!(id), do: Repo.get!(Identifier, id) |> Identifier.with_decrypted_value()
 
   def list_identifiers_for_entity(entity_id) do
     Identifier
     |> where([i], i.entity_id == ^entity_id)
     |> order_by([i], [desc: i.is_primary, asc: i.type])
     |> Repo.all()
+    |> Identifier.with_decrypted_values()
   end
 
   def create_identifier(attrs) do
@@ -411,6 +424,7 @@ defmodule Conezia.Entities do
     |> where([i], i.entity_id == ^entity_id and is_nil(i.archived_at))
     |> order_by([i], [desc: i.is_primary, asc: i.type])
     |> Repo.all()
+    |> Identifier.with_decrypted_values()
   end
 
   @doc """
@@ -421,6 +435,7 @@ defmodule Conezia.Entities do
     |> where([i], i.entity_id == ^entity_id and not is_nil(i.archived_at))
     |> order_by([i], [asc: i.type, desc: i.archived_at])
     |> Repo.all()
+    |> Identifier.with_decrypted_values()
   end
 
   def check_identifier_duplicates(type, value) do
@@ -638,7 +653,14 @@ defmodule Conezia.Entities do
     |> where([e], e.id == ^id and e.owner_id == ^user_id)
     |> preload_includes(includes)
     |> Repo.one()
+    |> decrypt_preloaded_identifiers()
   end
+
+  defp decrypt_preloaded_identifiers(nil), do: nil
+  defp decrypt_preloaded_identifiers(%Entity{identifiers: identifiers} = entity) when is_list(identifiers) do
+    %{entity | identifiers: Identifier.with_decrypted_values(identifiers)}
+  end
+  defp decrypt_preloaded_identifiers(entity), do: entity
 
   defp preload_includes(query, []), do: query
   defp preload_includes(query, includes) do
@@ -717,9 +739,10 @@ defmodule Conezia.Entities do
     end
 
     queries = if email do
+      email_hash = Conezia.Vault.blind_index(email, "identifier_email")
       q = from e in Entity,
         join: i in Identifier, on: i.entity_id == e.id,
-        where: e.owner_id == ^user_id and i.type == "email" and i.value == ^email,
+        where: e.owner_id == ^user_id and i.type == "email" and i.value_hash == ^email_hash,
         select: %{id: e.id, name: e.name, type: e.type, match_type: "email_exact", confidence: 1.0}
       [q | queries]
     else
@@ -727,9 +750,10 @@ defmodule Conezia.Entities do
     end
 
     queries = if phone do
+      phone_hash = Conezia.Vault.blind_index(phone, "identifier_phone")
       q = from e in Entity,
         join: i in Identifier, on: i.entity_id == e.id,
-        where: e.owner_id == ^user_id and i.type == "phone" and i.value == ^phone,
+        where: e.owner_id == ^user_id and i.type == "phone" and i.value_hash == ^phone_hash,
         select: %{id: e.id, name: e.name, type: e.type, match_type: "phone_exact", confidence: 1.0}
       [q | queries]
     else
@@ -794,7 +818,7 @@ defmodule Conezia.Entities do
     query = if entity_id, do: where(query, [i], i.entity_id == ^entity_id), else: query
     query = if type, do: where(query, [i], i.type == ^type), else: query
 
-    Repo.all(query)
+    Repo.all(query) |> Identifier.with_decrypted_values()
   end
 
   def get_identifier_for_user(id, user_id) do
@@ -803,15 +827,23 @@ defmodule Conezia.Entities do
       where: i.id == ^id and e.owner_id == ^user_id
     )
     |> Repo.one()
+    |> case do
+      nil -> nil
+      identifier -> Identifier.with_decrypted_value(identifier)
+    end
   end
 
   def find_identifiers_by_value(user_id, type, value) do
+    # Search by blind index hash instead of plaintext value
+    value_hash = Conezia.Vault.blind_index(value, "identifier_#{type}")
+
     from(i in Identifier,
       join: e in Entity, on: i.entity_id == e.id,
-      where: e.owner_id == ^user_id and i.type == ^type and i.value == ^value,
+      where: e.owner_id == ^user_id and i.type == ^type and i.value_hash == ^value_hash,
       preload: :entity
     )
     |> Repo.all()
+    |> Identifier.with_decrypted_values()
   end
 
   def search_entities(user_id, query, opts \\ []) do
@@ -966,10 +998,11 @@ defmodule Conezia.Entities do
   """
   def find_by_email(user_id, email) do
     normalized_email = String.downcase(email)
+    email_hash = Conezia.Vault.blind_index(normalized_email, "identifier_email")
 
     from(e in Entity,
       join: i in Identifier, on: i.entity_id == e.id,
-      where: e.owner_id == ^user_id and i.type == "email" and i.value == ^normalized_email
+      where: e.owner_id == ^user_id and i.type == "email" and i.value_hash == ^email_hash
     )
     |> Repo.one()
   end
@@ -978,9 +1011,11 @@ defmodule Conezia.Entities do
   Find an entity by phone number.
   """
   def find_by_phone(user_id, phone) do
+    phone_hash = Conezia.Vault.blind_index(phone, "identifier_phone")
+
     from(e in Entity,
       join: i in Identifier, on: i.entity_id == e.id,
-      where: e.owner_id == ^user_id and i.type == "phone" and i.value == ^phone
+      where: e.owner_id == ^user_id and i.type == "phone" and i.value_hash == ^phone_hash
     )
     |> Repo.one()
   end
@@ -1002,8 +1037,10 @@ defmodule Conezia.Entities do
   Check if an entity has a specific identifier.
   """
   def has_identifier?(entity_id, type, value) do
+    value_hash = Conezia.Vault.blind_index(value, "identifier_#{type}")
+
     from(i in Identifier,
-      where: i.entity_id == ^entity_id and i.type == ^type and i.value == ^value
+      where: i.entity_id == ^entity_id and i.type == ^type and i.value_hash == ^value_hash
     )
     |> Repo.exists?()
   end
@@ -1427,6 +1464,7 @@ defmodule Conezia.Entities do
         order_by: [asc: e.inserted_at]
       )
       |> Repo.all()
+      |> Enum.map(&decrypt_preloaded_identifiers/1)
 
     # Build lookup maps for matching
     email_map = build_identifier_map(entities, "email")
@@ -1463,7 +1501,7 @@ defmodule Conezia.Entities do
             # Sort by inserted_at to pick the oldest as primary
             sorted_ids = Enum.sort_by(matching_ids, fn id ->
               Enum.find(entities, &(&1.id == id)).inserted_at
-            end)
+            end, DateTime)
 
             [primary_id | duplicate_ids] = sorted_ids
             primary = Enum.find(entities, &(&1.id == primary_id))
@@ -1576,6 +1614,7 @@ defmodule Conezia.Entities do
 
   defp get_identifier_values(entity, type) do
     entity.identifiers
+    |> Identifier.with_decrypted_values()
     |> Enum.filter(&(&1.type == type && &1.value))
     |> Enum.map(&String.downcase(&1.value))
     |> MapSet.new()
@@ -1662,7 +1701,8 @@ defmodule Conezia.Entities do
 
   defp merge_single_entity(primary, duplicate) do
     # Move identifiers (avoiding duplicates)
-    Enum.each(duplicate.identifiers, fn identifier ->
+    decrypted_identifiers = Identifier.with_decrypted_values(duplicate.identifiers)
+    Enum.each(decrypted_identifiers, fn identifier ->
       unless has_identifier?(primary.id, identifier.type, identifier.value) do
         from(i in Identifier, where: i.id == ^identifier.id)
         |> Repo.update_all(set: [

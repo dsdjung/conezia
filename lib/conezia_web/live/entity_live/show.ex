@@ -1972,6 +1972,17 @@ defmodule ConeziaWeb.EntityLive.Show do
   defp category_sort_order("social"), do: 4
   defp category_sort_order(_), do: 5
 
+  defp format_field_value(%Conezia.Entities.CustomField{} = field) do
+    case Conezia.Entities.CustomField.get_value(field) do
+      nil -> "-"
+      %Date{} = date -> Calendar.strftime(date, "%b %d, %Y")
+      %Decimal{} = num -> Decimal.to_string(num)
+      true -> "Yes"
+      false -> "No"
+      value when is_binary(value) -> value
+      _ -> "-"
+    end
+  end
   defp format_field_value(%{field_type: "date", date_value: date}) when not is_nil(date) do
     Calendar.strftime(date, "%b %d, %Y")
   end

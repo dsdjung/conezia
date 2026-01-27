@@ -76,8 +76,10 @@ defmodule Conezia.Entities.CustomField do
     field :name, :string
     field :key, :string
     field :value, :string
+    field :value_encrypted, Conezia.Encrypted.Binary
     field :date_value, :date
     field :number_value, :decimal
+    field :number_value_encrypted, Conezia.Encrypted.Binary
     field :boolean_value, :boolean
     field :is_recurring, :boolean, default: false
     field :reminder_days_before, :integer
@@ -105,6 +107,7 @@ defmodule Conezia.Entities.CustomField do
     |> validate_number(:reminder_days_before, greater_than: 0, less_than_or_equal_to: 365)
     |> normalize_key()
     |> validate_value_for_type()
+    |> encrypt_values()
     |> foreign_key_constraint(:entity_id)
     |> unique_constraint([:entity_id, :key])
   end
@@ -185,12 +188,37 @@ defmodule Conezia.Entities.CustomField do
     end
   end
 
+  defp encrypt_values(changeset) do
+    changeset
+    |> encrypt_text_value()
+    |> encrypt_number_value()
+  end
+
+  defp encrypt_text_value(changeset) do
+    case get_change(changeset, :value) do
+      nil -> changeset
+      value -> put_change(changeset, :value_encrypted, value)
+    end
+  end
+
+  defp encrypt_number_value(changeset) do
+    case get_change(changeset, :number_value) do
+      nil -> changeset
+      number -> put_change(changeset, :number_value_encrypted, Decimal.to_string(number))
+    end
+  end
+
   @doc """
   Returns the actual value based on field_type.
+  Prefers encrypted fields, falls back to plaintext.
   """
   def get_value(%__MODULE__{field_type: "date", date_value: value}), do: value
+  def get_value(%__MODULE__{field_type: "number", number_value_encrypted: enc}) when not is_nil(enc) do
+    Decimal.new(enc)
+  end
   def get_value(%__MODULE__{field_type: "number", number_value: value}), do: value
   def get_value(%__MODULE__{field_type: "boolean", boolean_value: value}), do: value
+  def get_value(%__MODULE__{value_encrypted: enc}) when not is_nil(enc), do: enc
   def get_value(%__MODULE__{value: value}), do: value
 
   @doc """

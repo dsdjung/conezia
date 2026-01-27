@@ -14,8 +14,8 @@ defmodule Conezia.ExternalAccounts.ExternalAccount do
   schema "external_accounts" do
     field :service_name, :string
     field :account_identifier, :string
-    field :credentials, :binary
-    field :refresh_token, :binary
+    field :credentials, Conezia.Encrypted.Binary
+    field :refresh_token, Conezia.Encrypted.Binary
     field :status, :string, default: "connected"
     field :scopes, {:array, :string}, default: []
     field :last_synced_at, :utc_datetime_usec

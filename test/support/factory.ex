@@ -84,14 +84,43 @@ defmodule Conezia.Factory do
   def identifier_factory do
     value = sequence(:identifier_value, &"contact#{&1}@example.com")
     type = "email"
+    encrypted = Conezia.Vault.encrypt(value)
+    hash = Conezia.Vault.blind_index(value, "identifier_#{type}")
 
     %Identifier{
       type: type,
-      value: value,
-      value_hash: Conezia.Vault.blind_index(value, "identifier_#{type}"),
+      value: nil,
+      value_encrypted: encrypted,
+      value_hash: hash,
       is_primary: true,
       entity: build(:entity)
     }
+  end
+
+
+  @doc """
+  Insert an identifier using the changeset path to ensure proper encryption.
+  Use this instead of `insert(:identifier, value: ...)` when specifying a value.
+
+  ## Example
+      insert_encrypted_identifier(entity: entity, type: "email", value: "test@example.com")
+  """
+  def insert_encrypted_identifier(attrs) do
+    attrs = Enum.into(attrs, %{})
+
+    # Ensure entity and its owner exist in DB
+    entity = Map.get_lazy(attrs, :entity, fn -> insert(:entity) end)
+
+    changeset_attrs = %{
+      type: Map.get(attrs, :type, "email"),
+      value: Map.get(attrs, :value, "default#{System.unique_integer([:positive])}@example.com"),
+      is_primary: Map.get(attrs, :is_primary, true),
+      entity_id: entity.id
+    }
+
+    %Identifier{}
+    |> Identifier.changeset(changeset_attrs)
+    |> Conezia.Repo.insert!()
   end
 
   def tag_factory do

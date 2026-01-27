@@ -248,7 +248,7 @@ defmodule Conezia.EntitiesTest do
     test "find_by_email/2 finds entity by email (case-insensitive)" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
-      insert(:identifier, entity: entity, type: "email", value: "test@example.com")
+      insert_encrypted_identifier(entity: entity, type: "email", value: "test@example.com")
 
       # Should find with exact case
       assert %Entity{} = Entities.find_by_email(user.id, "test@example.com")
@@ -265,7 +265,7 @@ defmodule Conezia.EntitiesTest do
       user1 = insert(:user)
       user2 = insert(:user)
       entity = insert(:entity, owner: user1)
-      insert(:identifier, entity: entity, type: "email", value: "test@example.com")
+      insert_encrypted_identifier(entity: entity, type: "email", value: "test@example.com")
 
       assert %Entity{} = Entities.find_by_email(user1.id, "test@example.com")
       assert is_nil(Entities.find_by_email(user2.id, "test@example.com"))
@@ -274,7 +274,7 @@ defmodule Conezia.EntitiesTest do
     test "find_by_phone/2 finds entity by phone number" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
-      insert(:identifier, entity: entity, type: "phone", value: "+12025551234")
+      insert_encrypted_identifier(entity: entity, type: "phone", value: "+12025551234")
 
       assert %Entity{} = Entities.find_by_phone(user.id, "+12025551234")
       assert is_nil(Entities.find_by_phone(user.id, "+12025559999"))
@@ -333,8 +333,8 @@ defmodule Conezia.EntitiesTest do
       user = insert(:user)
       entity1 = insert(:entity, owner: user, name: "John Doe")
       entity2 = insert(:entity, owner: user, name: "John D.")
-      insert(:identifier, entity: entity1, type: "email", value: "john@example.com")
-      insert(:identifier, entity: entity2, type: "email", value: "john@example.com")
+      insert_encrypted_identifier(entity: entity1, type: "email", value: "john@example.com")
+      insert_encrypted_identifier(entity: entity2, type: "email", value: "john@example.com")
 
       groups = Entities.find_all_duplicates(user.id)
 
@@ -350,8 +350,8 @@ defmodule Conezia.EntitiesTest do
       user = insert(:user)
       entity1 = insert(:entity, owner: user, name: "Jane Smith")
       entity2 = insert(:entity, owner: user, name: "Jane S.")
-      insert(:identifier, entity: entity1, type: "phone", value: "+12025551234")
-      insert(:identifier, entity: entity2, type: "phone", value: "+12025551234")
+      insert_encrypted_identifier(entity: entity1, type: "phone", value: "+12025551234")
+      insert_encrypted_identifier(entity: entity2, type: "phone", value: "+12025551234")
 
       groups = Entities.find_all_duplicates(user.id)
 
@@ -383,9 +383,9 @@ defmodule Conezia.EntitiesTest do
       user = insert(:user)
       primary = insert(:entity, owner: user, name: "Primary Person")
       duplicate = insert(:entity, owner: user, name: "Duplicate Person")
-      insert(:identifier, entity: primary, type: "email", value: "primary@example.com")
-      insert(:identifier, entity: duplicate, type: "email", value: "dup@example.com")
-      insert(:identifier, entity: duplicate, type: "phone", value: "+12025559999")
+      insert_encrypted_identifier(entity: primary, type: "email", value: "primary@example.com")
+      insert_encrypted_identifier(entity: duplicate, type: "email", value: "dup@example.com")
+      insert_encrypted_identifier(entity: duplicate, type: "phone", value: "+12025559999")
 
       {:ok, merged} = Entities.merge_duplicate_entities(primary.id, [duplicate.id], user.id)
 
@@ -406,14 +406,14 @@ defmodule Conezia.EntitiesTest do
       # Create first duplicate group (email match)
       entity1 = insert(:entity, owner: user, name: "Person One")
       entity2 = insert(:entity, owner: user, name: "Person 1")
-      insert(:identifier, entity: entity1, type: "email", value: "person1@example.com")
-      insert(:identifier, entity: entity2, type: "email", value: "person1@example.com")
+      insert_encrypted_identifier(entity: entity1, type: "email", value: "person1@example.com")
+      insert_encrypted_identifier(entity: entity2, type: "email", value: "person1@example.com")
 
       # Create second duplicate group (phone match)
       entity3 = insert(:entity, owner: user, name: "Another Person")
       entity4 = insert(:entity, owner: user, name: "Another P.")
-      insert(:identifier, entity: entity3, type: "phone", value: "+12025551111")
-      insert(:identifier, entity: entity4, type: "phone", value: "+12025551111")
+      insert_encrypted_identifier(entity: entity3, type: "phone", value: "+12025551111")
+      insert_encrypted_identifier(entity: entity4, type: "phone", value: "+12025551111")
 
       {:ok, stats} = Entities.auto_merge_duplicates(user.id)
 
@@ -432,9 +432,9 @@ defmodule Conezia.EntitiesTest do
       source = insert(:entity, owner: user, name: "Source Person")
       target = insert(:entity, owner: user, name: "Target Person")
       # Use is_primary: false to avoid unique constraint issues on primary identifiers
-      insert(:identifier, entity: source, type: "email", value: "source@example.com", is_primary: false)
-      insert(:identifier, entity: source, type: "phone", value: "+12025551111", is_primary: false)
-      insert(:identifier, entity: target, type: "email", value: "target@example.com", is_primary: true)
+      insert_encrypted_identifier(entity: source, type: "email", value: "source@example.com", is_primary: false)
+      insert_encrypted_identifier(entity: source, type: "phone", value: "+12025551111", is_primary: false)
+      insert_encrypted_identifier(entity: target, type: "email", value: "target@example.com", is_primary: true)
 
       {:ok, {merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
 
@@ -531,8 +531,8 @@ defmodule Conezia.EntitiesTest do
 
       # Both entities have a primary email - this would cause a unique constraint violation
       # if not handled properly
-      insert(:identifier, entity: source, type: "email", value: "source@example.com", is_primary: true)
-      insert(:identifier, entity: target, type: "email", value: "target@example.com", is_primary: true)
+      insert_encrypted_identifier(entity: source, type: "email", value: "source@example.com", is_primary: true)
+      insert_encrypted_identifier(entity: target, type: "email", value: "target@example.com", is_primary: true)
 
       {:ok, {merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
 
@@ -559,8 +559,8 @@ defmodule Conezia.EntitiesTest do
       target = insert(:entity, owner: user, name: "Target Person")
 
       # Both entities have the same email
-      insert(:identifier, entity: source, type: "email", value: "shared@example.com", is_primary: true)
-      insert(:identifier, entity: target, type: "email", value: "shared@example.com", is_primary: true)
+      insert_encrypted_identifier(entity: source, type: "email", value: "shared@example.com", is_primary: true)
+      insert_encrypted_identifier(entity: target, type: "email", value: "shared@example.com", is_primary: true)
 
       {:ok, {merged, summary}} = Entities.merge_entities(source.id, target.id, user.id, merge_tags: false)
 

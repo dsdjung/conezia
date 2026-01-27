@@ -9,7 +9,7 @@ defmodule Conezia.Workers.SyncWorkerTest do
     test "does not create duplicate entity when email already exists" do
       user = insert(:user)
       existing = insert(:entity, owner: user, name: "John Doe")
-      insert(:identifier, entity: existing, type: "email", value: "john@example.com")
+      insert_encrypted_identifier(entity: existing, type: "email", value: "john@example.com")
 
       contact = %{
         name: "John D.",
@@ -33,7 +33,7 @@ defmodule Conezia.Workers.SyncWorkerTest do
     test "does not create duplicate entity when phone already exists" do
       user = insert(:user)
       existing = insert(:entity, owner: user, name: "Jane Smith")
-      insert(:identifier, entity: existing, type: "phone", value: "+12025551234")
+      insert_encrypted_identifier(entity: existing, type: "phone", value: "+12025551234")
 
       contact = %{
         name: "Jane S.",
@@ -117,7 +117,7 @@ defmodule Conezia.Workers.SyncWorkerTest do
     test "adds new identifiers when merging entities" do
       user = insert(:user)
       existing = insert(:entity, owner: user, name: "Contact Person")
-      insert(:identifier, entity: existing, type: "email", value: "contact@example.com")
+      insert_encrypted_identifier(entity: existing, type: "email", value: "contact@example.com")
 
       contact = %{
         name: "Contact Person",
@@ -141,7 +141,7 @@ defmodule Conezia.Workers.SyncWorkerTest do
       user = insert(:user)
       # Existing entity has short name "Oh"
       existing = insert(:entity, owner: user, name: "Oh")
-      insert(:identifier, entity: existing, type: "email", value: "david@example.com")
+      insert_encrypted_identifier(entity: existing, type: "email", value: "david@example.com")
 
       # New contact has longer name "David Oh"
       contact = %{
@@ -167,7 +167,7 @@ defmodule Conezia.Workers.SyncWorkerTest do
       user = insert(:user)
       # Existing entity has full name "David Oh"
       existing = insert(:entity, owner: user, name: "David Oh")
-      insert(:identifier, entity: existing, type: "email", value: "david@example.com")
+      insert_encrypted_identifier(entity: existing, type: "email", value: "david@example.com")
 
       # New contact has shorter name "Oh"
       contact = %{

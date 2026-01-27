@@ -13,7 +13,9 @@ defmodule Conezia.Gifts.Gift do
 
   schema "gifts" do
     field :name, :string
+    field :name_encrypted, Conezia.Encrypted.Binary
     field :description, :string
+    field :description_encrypted, Conezia.Encrypted.Binary
     field :status, :string, default: "idea"
     field :occasion, :string
     field :occasion_date, :date
@@ -21,6 +23,7 @@ defmodule Conezia.Gifts.Gift do
     field :actual_cost_cents, :integer
     field :url, :string
     field :notes, :string
+    field :notes_encrypted, Conezia.Encrypted.Binary
     field :given_at, :utc_datetime_usec
 
     belongs_to :user, Conezia.Accounts.User
@@ -48,9 +51,24 @@ defmodule Conezia.Gifts.Gift do
     |> validate_number(:budget_cents, greater_than_or_equal_to: 0)
     |> validate_number(:actual_cost_cents, greater_than_or_equal_to: 0)
     |> validate_url(:url)
+    |> encrypt_fields()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:entity_id)
     |> foreign_key_constraint(:reminder_id)
+  end
+
+  defp encrypt_fields(changeset) do
+    changeset
+    |> maybe_encrypt(:name, :name_encrypted)
+    |> maybe_encrypt(:description, :description_encrypted)
+    |> maybe_encrypt(:notes, :notes_encrypted)
+  end
+
+  defp maybe_encrypt(changeset, field, encrypted_field) do
+    case get_change(changeset, field) do
+      nil -> changeset
+      value -> put_change(changeset, encrypted_field, value)
+    end
   end
 
   def status_changeset(gift, new_status) do

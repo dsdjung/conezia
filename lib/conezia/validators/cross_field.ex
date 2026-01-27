@@ -147,8 +147,11 @@ defmodule Conezia.Validators.CrossField do
     id = get_field(changeset, :id)
 
     if entity_id && type && value do
+      # Use blind index hash for duplicate detection (values are encrypted)
+      value_hash = Conezia.Vault.blind_index(value, "identifier_#{type}")
+
       query = from i in Conezia.Entities.Identifier,
-        where: i.entity_id == ^entity_id and i.type == ^type and i.value == ^value
+        where: i.entity_id == ^entity_id and i.type == ^type and i.value_hash == ^value_hash
 
       query = if id, do: where(query, [i], i.id != ^id), else: query
 
