@@ -39,6 +39,10 @@ defmodule Conezia.Entities.Identifier do
     |> hash_value_for_duplicate_detection()  # Hash before encryption so we have the plaintext
     |> encrypt_sensitive_value()             # Encrypt sensitive values after hashing
     |> foreign_key_constraint(:entity_id)
+    |> unique_constraint([:entity_id, :type, :value_hash],
+      name: :identifiers_entity_type_value_unique_idx,
+      message: "already exists for this connection"
+    )
   end
 
   defp validate_identifier_value(changeset) do
