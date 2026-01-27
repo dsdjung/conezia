@@ -1210,6 +1210,61 @@ defmodule Conezia.Entities do
   end
 
   @doc """
+  List upcoming recurring date occasions for a user's connections.
+  Returns custom fields with is_recurring=true and a date_value,
+  sorted by next occurrence within the given number of days ahead.
+  Each result includes the entity (connection) preloaded.
+  """
+  def list_upcoming_occasions(user_id, days_ahead \\ 90) do
+    today = Date.utc_today()
+
+    # Get all recurring date fields for user's entities
+    recurring_dates =
+      from(cf in CustomField,
+        join: e in Entity, on: cf.entity_id == e.id,
+        where: e.owner_id == ^user_id,
+        where: cf.field_type == "date",
+        where: cf.is_recurring == true,
+        where: not is_nil(cf.date_value),
+        where: is_nil(e.archived_at),
+        preload: [entity: e]
+      )
+      |> Repo.all()
+
+    # Calculate next occurrence for each and filter within window
+    recurring_dates
+    |> Enum.map(fn cf ->
+      next = next_occurrence(cf.date_value, today)
+      %{custom_field: cf, entity: cf.entity, next_date: next, key: cf.key, name: cf.name}
+    end)
+    |> Enum.filter(fn %{next_date: next} ->
+      Date.diff(next, today) >= 0 and Date.diff(next, today) <= days_ahead
+    end)
+    |> Enum.sort_by(fn %{next_date: next} -> Date.to_iso8601(next) end)
+  end
+
+  defp next_occurrence(date_value, today) do
+    # Get this year's occurrence
+    this_year = try do
+      Date.new!(today.year, date_value.month, date_value.day)
+    rescue
+      # Handle Feb 29 for non-leap years
+      _ -> Date.new!(today.year, date_value.month, min(date_value.day, Date.days_in_month(Date.new!(today.year, date_value.month, 1))))
+    end
+
+    if Date.compare(this_year, today) == :lt do
+      # Already passed this year, use next year
+      try do
+        Date.new!(today.year + 1, date_value.month, date_value.day)
+      rescue
+        _ -> Date.new!(today.year + 1, date_value.month, min(date_value.day, Date.days_in_month(Date.new!(today.year + 1, date_value.month, 1))))
+      end
+    else
+      this_year
+    end
+  end
+
+  @doc """
   Get predefined field suggestions.
   """
   def predefined_custom_fields do
