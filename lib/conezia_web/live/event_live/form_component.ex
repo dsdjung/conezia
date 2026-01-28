@@ -158,7 +158,10 @@ defmodule ConeziaWeb.EventLive.FormComponent do
   def handle_event("search-entities", %{"query" => query}, socket) do
     user_id = socket.assigns.current_user.id
     {entities, _meta} = Entities.list_entities(user_id, search: query, limit: 20)
-    results = Enum.map(entities, fn e -> %{value: e.id, text: e.name} end)
+    results = Enum.map(entities, fn e ->
+      label = if e.is_self, do: "#{e.name} (me)", else: e.name
+      %{value: e.id, text: label}
+    end)
     {:reply, %{results: results}, socket}
   end
 

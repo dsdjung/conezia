@@ -264,7 +264,10 @@ defmodule ConeziaWeb.EntityLive.Index do
                 </div>
                 <div class="min-w-0 flex-1 px-4">
                   <div>
-                    <p class="truncate text-sm font-medium text-indigo-600">{entity.name}</p>
+                    <p class="truncate text-sm font-medium text-indigo-600">
+                      {entity.name}
+                      <span :if={entity.is_self} class="text-xs text-gray-400 font-normal">(me)</span>
+                    </p>
                     <p class="mt-1 truncate text-sm text-gray-500">{entity.description || "No description"}</p>
                   </div>
                   <div class="mt-2 flex items-center gap-2 flex-wrap">

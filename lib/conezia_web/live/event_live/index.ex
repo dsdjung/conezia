@@ -54,7 +54,10 @@ defmodule ConeziaWeb.EventLive.Index do
       selected_entities =
         case event do
           %{entities: entities} when is_list(entities) ->
-            Enum.map(entities, &{&1.name, &1.id})
+            Enum.map(entities, fn e ->
+              label = if e.is_self, do: "#{e.name} (me)", else: e.name
+              {label, e.id}
+            end)
           _ -> []
         end
 
@@ -242,10 +245,11 @@ defmodule ConeziaWeb.EventLive.Index do
                 </div>
                 <div :if={event.entities != []} class="mt-1 flex items-center gap-1 text-xs text-gray-500">
                   <span class="hero-users h-4 w-4" />
-                  <span :for={entity <- event.entities} class="inline-flex">
+                  <span :for={entity <- event.entities} class="inline-flex items-center gap-0.5">
                     <.link navigate={~p"/connections/#{entity.id}"} class="text-indigo-600 hover:text-indigo-500">
                       {entity.name}
                     </.link>
+                    <span :if={entity.is_self} class="text-gray-400 text-xs">(me)</span>
                   </span>
                 </div>
               </div>

@@ -203,6 +203,7 @@ defmodule ConeziaWeb.ReminderLive.Index do
                       • <.link navigate={~p"/connections/#{reminder.entity.id}"} class="text-indigo-600 hover:text-indigo-500">
                         {reminder.entity.name}
                       </.link>
+                      <span :if={reminder.entity.is_self} class="text-gray-400">(me)</span>
                     </span>
                   </div>
                 </div>
@@ -327,7 +328,10 @@ defmodule ConeziaWeb.ReminderLive.Index do
 
   defp list_entities_for_select(user_id) do
     {entities, _meta} = Entities.list_entities(user_id, limit: 100)
-    Enum.map(entities, &{&1.name, &1.id})
+    Enum.map(entities, fn e ->
+      label = if e.is_self, do: "#{e.name} (me)", else: e.name
+      {label, e.id}
+    end)
   end
 
   defp reminder_status_color(reminder) do

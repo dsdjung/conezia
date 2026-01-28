@@ -261,6 +261,7 @@ defmodule ConeziaWeb.GiftLive.Index do
                       For: <.link navigate={~p"/connections/#{gift.entity.id}"} class="text-indigo-600 hover:text-indigo-500">
                         {gift.entity.name}
                       </.link>
+                      <span :if={gift.entity.is_self} class="text-gray-400">(me)</span>
                     </span>
                     <span :if={gift.occasion_date}>• {format_date(gift.occasion_date)}</span>
                     <span :if={gift.budget_cents}>• {format_cents(gift.budget_cents)}</span>
@@ -355,7 +356,10 @@ defmodule ConeziaWeb.GiftLive.Index do
 
   defp list_entities_for_select(user_id) do
     {entities, _meta} = Entities.list_entities(user_id, limit: 100)
-    Enum.map(entities, &{&1.name, &1.id})
+    Enum.map(entities, fn e ->
+      label = if e.is_self, do: "#{e.name} (me)", else: e.name
+      {label, e.id}
+    end)
   end
 
   defp parse_date(nil), do: nil
