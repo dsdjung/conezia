@@ -11,7 +11,7 @@ config :conezia, Conezia.Repo,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10,
-  log: :info  # Reduce DB query logging (set to false to disable completely)
+  log: false  # Disable DB query logging in development
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
