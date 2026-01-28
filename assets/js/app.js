@@ -112,12 +112,17 @@ Hooks.SearchableSelect = {
 
     const hook = this
 
+    // Find the nearest modal/focus-wrap container so the dropdown renders
+    // inside it and doesn't trigger phx-click-away
+    const focusWrap = this.el.closest("[id$='-container']") || this.el.closest("[id$='-content']") || document.body
+
     this.tomSelect = new TomSelect(select, {
       plugins: ["remove_button"],
       create: false,
       valueField: "value",
       labelField: "text",
       searchField: "text",
+      dropdownParent: focusWrap,
       load(query, callback) {
         if (!query.length) return callback()
         hook.pushEventTo(hook.el, "search-entities", { query }, (reply) => {
@@ -128,14 +133,6 @@ Hooks.SearchableSelect = {
       options: preselected,
       items: preselected.map(o => o.value)
     })
-
-    // Prevent Tom Select's body-level dropdown from triggering phx-click-away
-    // which would close the modal
-    if (this.tomSelect.dropdown) {
-      this.tomSelect.dropdown.addEventListener("mousedown", (e) => {
-        e.stopPropagation()
-      })
-    }
   },
   destroyed() {
     if (this.tomSelect) {
