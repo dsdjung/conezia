@@ -46,12 +46,15 @@ defmodule ConeziaWeb.EventLive.FormComponent do
           required
         />
 
-        <div class="grid grid-cols-2 gap-4">
+        <.input field={@form[:all_day]} type="checkbox" label="All day event" />
+
+        <div :if={@all_day} class="grid grid-cols-1 gap-4">
+          <.input field={@form[:starts_at]} type="date" label="Date" required />
+        </div>
+        <div :if={!@all_day} class="grid grid-cols-2 gap-4">
           <.input field={@form[:starts_at]} type="datetime-local" label="Start" required />
           <.input field={@form[:ends_at]} type="datetime-local" label="End (optional)" />
         </div>
-
-        <.input field={@form[:all_day]} type="checkbox" label="All day event" />
         <.input field={@form[:location]} type="text" label="Location (optional)" />
 
         <.input
@@ -90,6 +93,7 @@ defmodule ConeziaWeb.EventLive.FormComponent do
      |> assign(assigns)
      |> assign(:event_types, @event_types)
      |> assign(:selected_entity_ids, entity_ids)
+     |> assign(:all_day, event.all_day || false)
      |> assign_form(changeset)}
   end
 
@@ -100,10 +104,16 @@ defmodule ConeziaWeb.EventLive.FormComponent do
       |> Events.change_event(event_params)
       |> Map.put(:action, :validate)
 
-    {:noreply, assign_form(socket, changeset)}
+    all_day = event_params["all_day"] == "true"
+
+    {:noreply,
+     socket
+     |> assign(:all_day, all_day)
+     |> assign_form(changeset)}
   end
 
   def handle_event("save", %{"event" => event_params}, socket) do
+    event_params = maybe_convert_date_to_datetime(event_params)
     save_event(socket, socket.assigns.action, event_params)
   end
 
@@ -138,6 +148,15 @@ defmodule ConeziaWeb.EventLive.FormComponent do
         {:noreply, assign_form(socket, changeset)}
     end
   end
+
+  # When all_day is true, the form sends a date string (e.g. "2026-03-15")
+  # instead of a datetime-local string. Convert it to a full datetime for starts_at.
+  defp maybe_convert_date_to_datetime(%{"all_day" => "true", "starts_at" => date_str} = params)
+       when is_binary(date_str) and byte_size(date_str) == 10 do
+    Map.put(params, "starts_at", date_str <> "T00:00")
+  end
+
+  defp maybe_convert_date_to_datetime(params), do: params
 
   defp assign_form(socket, %Ecto.Changeset{} = changeset) do
     assign(socket, :form, to_form(changeset, as: "event"))
