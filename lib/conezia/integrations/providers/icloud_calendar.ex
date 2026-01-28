@@ -250,7 +250,9 @@ defmodule Conezia.Integrations.Providers.ICloudCalendar do
       {"depth", "1"}
     ]
 
-    time_min = Keyword.get(opts, :time_min) || DateTime.utc_now() |> DateTime.add(-365, :day)
+    # Default: only import events from 30 days ago to 1 year in the future
+    # This prevents importing years-old historical events
+    time_min = Keyword.get(opts, :time_min) || DateTime.utc_now() |> DateTime.add(-30, :day)
     time_max = Keyword.get(opts, :time_max) || DateTime.utc_now() |> DateTime.add(365, :day)
 
     case get_calendar_path(headers) do

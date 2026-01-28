@@ -191,7 +191,9 @@ defmodule Conezia.Integrations.Providers.Google do
   Returns a list of event maps with Google Calendar metadata.
   """
   def fetch_calendar_events(access_token, opts \\ []) do
-    time_min = Keyword.get(opts, :time_min) || DateTime.utc_now() |> DateTime.add(-365, :day) |> DateTime.to_iso8601()
+    # Default: only import events from 30 days ago to 1 year in the future
+    # This prevents importing years-old historical events
+    time_min = Keyword.get(opts, :time_min) || DateTime.utc_now() |> DateTime.add(-30, :day) |> DateTime.to_iso8601()
     time_max = Keyword.get(opts, :time_max) || DateTime.utc_now() |> DateTime.add(365, :day) |> DateTime.to_iso8601()
     sync_token = Keyword.get(opts, :sync_token)
 
