@@ -105,16 +105,12 @@ Hooks.SearchableSelect = {
     const select = this.el.querySelector("select")
     if (!select) return
 
-    // Capture pre-selected options before Tom Select takes over
     const preselected = Array.from(select.selectedOptions).map(o => ({
       value: o.value, text: o.text
     }))
 
     const hook = this
-
-    // Find the nearest modal/focus-wrap container so the dropdown renders
-    // inside it and doesn't trigger phx-click-away
-    const focusWrap = this.el.closest("[id$='-container']") || this.el.closest("[id$='-content']") || document.body
+    const focusWrap = this.el.closest("[id$='-container']")
 
     this.tomSelect = new TomSelect(select, {
       plugins: ["remove_button"],
@@ -122,14 +118,23 @@ Hooks.SearchableSelect = {
       valueField: "value",
       labelField: "text",
       searchField: "text",
-      dropdownParent: focusWrap,
       load(query, callback) {
         if (!query.length) return callback()
         hook.pushEventTo(hook.el, "search-entities", { query }, (reply) => {
           callback(reply.results)
         })
       },
-      // Pre-populate with initially selected items
+      onDropdownOpen() {
+        if (focusWrap) {
+          hook._savedClickAway = focusWrap.getAttribute("phx-click-away")
+          focusWrap.removeAttribute("phx-click-away")
+        }
+      },
+      onDropdownClose() {
+        if (focusWrap && hook._savedClickAway) {
+          focusWrap.setAttribute("phx-click-away", hook._savedClickAway)
+        }
+      },
       options: preselected,
       items: preselected.map(o => o.value)
     })
