@@ -14,6 +14,8 @@ defmodule ConeziaWeb.EventLive.FormComponent do
     {"Meeting", "meeting"},
     {"Dinner", "dinner"},
     {"Party", "party"},
+    {"Wedding", "wedding"},
+    {"Memorial", "memorial"},
     {"Reunion", "reunion"},
     {"Trip", "trip"},
     {"Other", "other"}
@@ -66,6 +68,7 @@ defmodule ConeziaWeb.EventLive.FormComponent do
         />
 
         <.input field={@form[:is_recurring]} type="checkbox" label="Recurring event" />
+        <.input field={@form[:remind_yearly]} type="checkbox" label="Remind me every year" />
 
         <.input field={@form[:description]} type="textarea" label="Description" />
         <.input field={@form[:notes]} type="textarea" label="Notes" />

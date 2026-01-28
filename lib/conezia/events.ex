@@ -145,7 +145,12 @@ defmodule Conezia.Events do
       reminder_at = DateTime.add(event.starts_at, -14 * 86400, :second)
 
       if DateTime.compare(reminder_at, DateTime.utc_now()) == :gt do
-        recurrence = if event.is_recurring, do: event.recurrence_rule, else: nil
+        recurrence =
+          cond do
+            event.is_recurring -> event.recurrence_rule
+            event.remind_yearly -> %{"freq" => "yearly"}
+            true -> nil
+          end
 
         case Reminders.create_reminder(%{
                type: "event",

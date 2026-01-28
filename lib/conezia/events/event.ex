@@ -8,7 +8,7 @@ defmodule Conezia.Events.Event do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @event_types ~w(birthday anniversary holiday celebration meeting dinner party reunion trip other)
+  @event_types ~w(birthday anniversary holiday celebration wedding memorial meeting dinner party reunion trip other)
 
   schema "events" do
     field :title, :string
@@ -22,6 +22,7 @@ defmodule Conezia.Events.Event do
     field :location, :string
     field :location_encrypted, Conezia.Encrypted.Binary
     field :is_recurring, :boolean, default: false
+    field :remind_yearly, :boolean, default: false
     field :recurrence_rule, :map
     field :notes, :string
     field :notes_encrypted, Conezia.Encrypted.Binary
@@ -38,7 +39,7 @@ defmodule Conezia.Events.Event do
   @required_fields [:title, :type, :starts_at, :user_id]
   @optional_fields [
     :description, :ends_at, :all_day, :location, :is_recurring,
-    :recurrence_rule, :notes, :reminder_id
+    :remind_yearly, :recurrence_rule, :notes, :reminder_id
   ]
 
   def changeset(event, attrs) do

@@ -217,5 +217,7 @@ defmodule ConeziaWeb.EventLive.Index do
   defp type_color("meeting"), do: :blue
   defp type_color("dinner"), do: :yellow
   defp type_color("party"), do: :green
+  defp type_color("wedding"), do: :indigo
+  defp type_color("memorial"), do: :gray
   defp type_color(_), do: :gray
 end

@@ -86,6 +86,41 @@ defmodule Conezia.EventsTest do
       refute event.reminder_id
     end
 
+    test "creates yearly recurring reminder when remind_yearly is true" do
+      user = insert(:user)
+
+      attrs = %{
+        title: "Wedding Day",
+        type: "wedding",
+        starts_at: DateTime.add(DateTime.utc_now(), 86400 * 30, :second),
+        remind_yearly: true,
+        user_id: user.id
+      }
+
+      assert {:ok, %Event{} = event} = Events.create_event(attrs)
+      assert event.reminder_id
+      assert event.remind_yearly == true
+      refute event.is_recurring
+
+      reminder = Conezia.Reminders.get_reminder(event.reminder_id)
+      assert reminder.recurrence_rule == %{"freq" => "yearly"}
+    end
+
+    test "accepts wedding and memorial event types" do
+      user = insert(:user)
+
+      for type <- ["wedding", "memorial"] do
+        attrs = %{
+          title: "Test #{type}",
+          type: type,
+          starts_at: DateTime.utc_now(),
+          user_id: user.id
+        }
+
+        assert {:ok, %Event{}} = Events.create_event(attrs)
+      end
+    end
+
     test "links entities when entity_ids provided" do
       user = insert(:user)
       entity1 = insert(:entity, owner: user)
