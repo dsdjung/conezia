@@ -25,6 +25,8 @@ defmodule Conezia.Events do
     entity_id = Keyword.get(opts, :entity_id)
     date_from = Keyword.get(opts, :date_from)
     date_to = Keyword.get(opts, :date_to)
+    # Time filter: "upcoming" (default) shows only current/future, "all" shows everything
+    time_filter = Keyword.get(opts, :time_filter, "upcoming")
 
     query =
       from e in Event,
@@ -39,6 +41,7 @@ defmodule Conezia.Events do
       |> filter_by_search(search)
       |> filter_by_entity(entity_id)
       |> filter_by_date_range(date_from, date_to)
+      |> filter_by_time(time_filter)
       |> apply_sort(sort)
       |> Repo.all()
 
@@ -52,11 +55,13 @@ defmodule Conezia.Events do
     type = Keyword.get(opts, :type)
     search = Keyword.get(opts, :search)
     entity_id = Keyword.get(opts, :entity_id)
+    time_filter = Keyword.get(opts, :time_filter, "upcoming")
 
     from(e in Event, where: e.user_id == ^user_id, select: count(e.id))
     |> filter_by_type(type)
     |> filter_by_search(search)
     |> filter_by_entity(entity_id)
+    |> filter_by_time(time_filter)
     |> Repo.one()
   end
 
@@ -247,6 +252,16 @@ defmodule Conezia.Events do
     query
     |> maybe_filter_from(date_from)
     |> maybe_filter_to(date_to)
+  end
+
+  # Filter by time: "upcoming" shows events starting from beginning of today (in UTC)
+  # "all" shows all events including past ones
+  defp filter_by_time(query, "all"), do: query
+
+  defp filter_by_time(query, _) do
+    # Start of today in UTC
+    today_start = DateTime.utc_now() |> DateTime.to_date() |> DateTime.new!(~T[00:00:00], "Etc/UTC")
+    where(query, [e], e.starts_at >= ^today_start)
   end
 
   defp maybe_filter_from(query, nil), do: query

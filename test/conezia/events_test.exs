@@ -238,7 +238,8 @@ defmodule Conezia.EventsTest do
       early = insert(:event, user: user, starts_at: ~U[2026-01-01 00:00:00Z])
       late = insert(:event, user: user, starts_at: ~U[2026-06-01 00:00:00Z])
 
-      {events, _meta} = Events.list_events(user.id, sort: "date_desc")
+      # Use time_filter: "all" to include past events in this test
+      {events, _meta} = Events.list_events(user.id, sort: "date_desc", time_filter: "all")
       assert hd(events).id == late.id
       assert List.last(events).id == early.id
     end
@@ -282,6 +283,31 @@ defmodule Conezia.EventsTest do
       {events, _meta} = Events.list_events(user.id, entity_id: entity.id)
       assert length(events) == 1
       assert hd(events).id == event.id
+    end
+
+    test "filters out past events by default (upcoming filter)" do
+      user = insert(:user)
+      # Past event (before today)
+      _past = insert(:event, user: user, starts_at: ~U[2025-01-01 00:00:00Z])
+      # Future event
+      future = insert(:event, user: user, starts_at: DateTime.add(DateTime.utc_now(), 86400 * 7, :second))
+
+      # Default behavior - only upcoming events
+      {events, _meta} = Events.list_events(user.id)
+      assert length(events) == 1
+      assert hd(events).id == future.id
+    end
+
+    test "includes past events when time_filter is 'all'" do
+      user = insert(:user)
+      past = insert(:event, user: user, starts_at: ~U[2025-01-01 00:00:00Z])
+      future = insert(:event, user: user, starts_at: DateTime.add(DateTime.utc_now(), 86400 * 7, :second))
+
+      {events, _meta} = Events.list_events(user.id, time_filter: "all")
+      assert length(events) == 2
+      event_ids = Enum.map(events, & &1.id)
+      assert past.id in event_ids
+      assert future.id in event_ids
     end
   end
 

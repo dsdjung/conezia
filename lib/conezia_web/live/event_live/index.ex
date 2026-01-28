@@ -14,8 +14,9 @@ defmodule ConeziaWeb.EventLive.Index do
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
     self_entity = Entities.get_self_entity(user.id)
-    {events, meta} = Events.list_events(user.id, limit: @page_size)
-    total_count = Events.count_events(user.id)
+    # Default to showing only upcoming events (today and future)
+    {events, meta} = Events.list_events(user.id, limit: @page_size, time_filter: "upcoming")
+    total_count = Events.count_events(user.id, time_filter: "upcoming")
 
     socket =
       socket
@@ -24,6 +25,7 @@ defmodule ConeziaWeb.EventLive.Index do
       |> assign(:type_filter, nil)
       |> assign(:sort, "date_asc")
       |> assign(:involvement, "all")
+      |> assign(:time_filter, "upcoming")
       |> assign(:self_entity_id, self_entity && self_entity.id)
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
@@ -96,6 +98,10 @@ defmodule ConeziaWeb.EventLive.Index do
     {:noreply, load_events(assign(socket, :involvement, involvement))}
   end
 
+  def handle_event("filter_time", %{"time" => time_filter}, socket) do
+    {:noreply, load_events(assign(socket, :time_filter, time_filter))}
+  end
+
   def handle_event("load-more", _params, socket) do
     if socket.assigns.loading or not socket.assigns.has_more do
       {:noreply, socket}
@@ -111,6 +117,7 @@ defmodule ConeziaWeb.EventLive.Index do
         type: socket.assigns.type_filter,
         sort: socket.assigns.sort,
         entity_id: involvement_entity_id(socket.assigns),
+        time_filter: socket.assigns.time_filter,
         limit: @page_size,
         offset: offset
       )
@@ -168,6 +175,15 @@ defmodule ConeziaWeb.EventLive.Index do
               {@total_count} {if @total_count == 1, do: "event", else: "events"}
             </h3>
             <div class="flex items-center gap-2">
+              <form phx-change="filter_time">
+                <select
+                  name="time"
+                  class="block rounded-md border-gray-300 text-xs focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="upcoming" selected={@time_filter == "upcoming"}>Upcoming</option>
+                  <option value="all" selected={@time_filter == "all"}>All Time</option>
+                </select>
+              </form>
               <form :if={@self_entity_id} phx-change="filter_involvement">
                 <select
                   name="involvement"
@@ -324,13 +340,15 @@ defmodule ConeziaWeb.EventLive.Index do
       type: socket.assigns.type_filter,
       sort: socket.assigns.sort,
       entity_id: entity_filter,
+      time_filter: socket.assigns.time_filter,
       limit: @page_size
     )
 
     total_count = Events.count_events(user.id,
       search: socket.assigns.search,
       type: socket.assigns.type_filter,
-      entity_id: entity_filter
+      entity_id: entity_filter,
+      time_filter: socket.assigns.time_filter
     )
 
     socket
