@@ -215,6 +215,62 @@ defmodule Conezia.EventsTest do
       assert hd(events).type == "meeting"
     end
 
+    test "filters by search term" do
+      user = insert(:user)
+      insert(:event, user: user, title: "Birthday Party")
+      insert(:event, user: user, title: "Team Meeting")
+
+      {events, _meta} = Events.list_events(user.id, search: "birthday")
+      assert length(events) == 1
+      assert hd(events).title == "Birthday Party"
+    end
+
+    test "search is case-insensitive" do
+      user = insert(:user)
+      insert(:event, user: user, title: "Birthday Party")
+
+      {events, _meta} = Events.list_events(user.id, search: "BIRTHDAY")
+      assert length(events) == 1
+    end
+
+    test "sorts by date descending" do
+      user = insert(:user)
+      early = insert(:event, user: user, starts_at: ~U[2026-01-01 00:00:00Z])
+      late = insert(:event, user: user, starts_at: ~U[2026-06-01 00:00:00Z])
+
+      {events, _meta} = Events.list_events(user.id, sort: "date_desc")
+      assert hd(events).id == late.id
+      assert List.last(events).id == early.id
+    end
+
+    test "sorts by title" do
+      user = insert(:user)
+      insert(:event, user: user, title: "Zebra Event")
+      insert(:event, user: user, title: "Alpha Event")
+
+      {events, _meta} = Events.list_events(user.id, sort: "title")
+      assert hd(events).title == "Alpha Event"
+      assert List.last(events).title == "Zebra Event"
+    end
+
+    test "has_more is true when more events exist" do
+      user = insert(:user)
+      for _ <- 1..3, do: insert(:event, user: user)
+
+      {events, meta} = Events.list_events(user.id, limit: 2)
+      assert length(events) == 2
+      assert meta.has_more == true
+    end
+
+    test "has_more is false when no more events" do
+      user = insert(:user)
+      insert(:event, user: user)
+
+      {events, meta} = Events.list_events(user.id, limit: 10)
+      assert length(events) == 1
+      assert meta.has_more == false
+    end
+
     test "filters by entity_id" do
       user = insert(:user)
       entity = insert(:entity, owner: user)
@@ -226,6 +282,33 @@ defmodule Conezia.EventsTest do
       {events, _meta} = Events.list_events(user.id, entity_id: entity.id)
       assert length(events) == 1
       assert hd(events).id == event.id
+    end
+  end
+
+  describe "count_events/2" do
+    test "counts all events for user" do
+      user = insert(:user)
+      insert(:event, user: user)
+      insert(:event, user: user)
+      insert(:event, user: insert(:user))
+
+      assert Events.count_events(user.id) == 2
+    end
+
+    test "counts with search filter" do
+      user = insert(:user)
+      insert(:event, user: user, title: "Birthday Party")
+      insert(:event, user: user, title: "Team Meeting")
+
+      assert Events.count_events(user.id, search: "birthday") == 1
+    end
+
+    test "counts with type filter" do
+      user = insert(:user)
+      insert(:event, user: user, type: "meeting")
+      insert(:event, user: user, type: "dinner")
+
+      assert Events.count_events(user.id, type: "meeting") == 1
     end
   end
 

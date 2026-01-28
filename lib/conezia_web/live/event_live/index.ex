@@ -7,15 +7,24 @@ defmodule ConeziaWeb.EventLive.Index do
   alias Conezia.Events
   alias Conezia.Events.Event
 
+  @page_size 25
+
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
-    {events, _meta} = Events.list_events(user.id)
+    {events, meta} = Events.list_events(user.id, limit: @page_size)
+    total_count = Events.count_events(user.id)
 
     socket =
       socket
       |> assign(:page_title, "Events")
+      |> assign(:search, "")
       |> assign(:type_filter, nil)
+      |> assign(:sort, "date_asc")
+      |> assign(:page, 0)
+      |> assign(:has_more, meta.has_more)
+      |> assign(:loading, false)
+      |> assign(:total_count, total_count)
       |> stream(:events, events)
 
     {:ok, socket}
@@ -63,16 +72,44 @@ defmodule ConeziaWeb.EventLive.Index do
   end
 
   @impl true
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, load_events(assign(socket, :search, search))}
+  end
+
   def handle_event("filter_type", %{"type" => type}, socket) do
-    user = socket.assigns.current_user
     type = if type == "", do: nil, else: type
+    {:noreply, load_events(assign(socket, :type_filter, type))}
+  end
 
-    {events, _meta} = Events.list_events(user.id, type: type)
+  def handle_event("sort", %{"sort" => sort}, socket) do
+    {:noreply, load_events(assign(socket, :sort, sort))}
+  end
 
-    {:noreply,
-     socket
-     |> assign(:type_filter, type)
-     |> stream(:events, events, reset: true)}
+  def handle_event("load-more", _params, socket) do
+    if socket.assigns.loading or not socket.assigns.has_more do
+      {:noreply, socket}
+    else
+      user = socket.assigns.current_user
+      next_page = socket.assigns.page + 1
+      offset = next_page * @page_size
+
+      socket = assign(socket, :loading, true)
+
+      {events, meta} = Events.list_events(user.id,
+        search: socket.assigns.search,
+        type: socket.assigns.type_filter,
+        sort: socket.assigns.sort,
+        limit: @page_size,
+        offset: offset
+      )
+
+      {:noreply,
+       socket
+       |> assign(:page, next_page)
+       |> assign(:has_more, meta.has_more)
+       |> assign(:loading, false)
+       |> stream(:events, events)}
+    end
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
@@ -113,18 +150,46 @@ defmodule ConeziaWeb.EventLive.Index do
       </.header>
 
       <div class="bg-white shadow ring-1 ring-gray-200 rounded-lg overflow-hidden">
-        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-gray-900">All Events</h3>
-          <form phx-change="filter_type">
-            <select
-              name="type"
-              class="block rounded-md border-gray-300 text-xs focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="" selected={is_nil(@type_filter)}>All Types</option>
-              <option :for={type <- Event.valid_types()} value={type} selected={@type_filter == type}>
-                {humanize(type)}
-              </option>
-            </select>
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-900">
+              {@total_count} {if @total_count == 1, do: "event", else: "events"}
+            </h3>
+            <div class="flex items-center gap-2">
+              <form phx-change="filter_type">
+                <select
+                  name="type"
+                  class="block rounded-md border-gray-300 text-xs focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="" selected={is_nil(@type_filter)}>All Types</option>
+                  <option :for={type <- Event.valid_types()} value={type} selected={@type_filter == type}>
+                    {humanize(type)}
+                  </option>
+                </select>
+              </form>
+              <form phx-change="sort">
+                <select
+                  name="sort"
+                  class="block rounded-md border-gray-300 text-xs focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="date_asc" selected={@sort == "date_asc"}>Date (earliest)</option>
+                  <option value="date_desc" selected={@sort == "date_desc"}>Date (latest)</option>
+                  <option value="title" selected={@sort == "title"}>Title A-Z</option>
+                  <option value="newest" selected={@sort == "newest"}>Newest first</option>
+                  <option value="oldest" selected={@sort == "oldest"}>Oldest first</option>
+                </select>
+              </form>
+            </div>
+          </div>
+          <form phx-change="search">
+            <input
+              type="text"
+              name="search"
+              value={@search}
+              placeholder="Search events..."
+              phx-debounce="300"
+              class="block w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
           </form>
         </div>
 
@@ -188,9 +253,13 @@ defmodule ConeziaWeb.EventLive.Index do
           <div class="text-center">
             <span class="hero-calendar h-10 w-10 text-gray-400 mx-auto" />
             <p class="mt-2 text-sm text-gray-500">
-              {if @type_filter, do: "No events match this filter.", else: "No events yet. Create your first event!"}
+              {if @search != "" || @type_filter, do: "No events match your filters.", else: "No events yet. Create your first event!"}
             </p>
           </div>
+        </div>
+
+        <div :if={@has_more} id="events-infinite-scroll" phx-hook="InfiniteScroll" class="py-4 flex justify-center">
+          <div :if={@loading} class="text-sm text-gray-500">Loading more...</div>
         </div>
       </div>
 
@@ -215,6 +284,27 @@ defmodule ConeziaWeb.EventLive.Index do
     """
   end
 
+  defp load_events(socket) do
+    user = socket.assigns.current_user
+
+    {events, meta} = Events.list_events(user.id,
+      search: socket.assigns.search,
+      type: socket.assigns.type_filter,
+      sort: socket.assigns.sort,
+      limit: @page_size
+    )
+
+    total_count = Events.count_events(user.id,
+      search: socket.assigns.search,
+      type: socket.assigns.type_filter
+    )
+
+    socket
+    |> assign(:page, 0)
+    |> assign(:has_more, meta.has_more)
+    |> assign(:total_count, total_count)
+    |> stream(:events, events, reset: true)
+  end
 
   defp format_datetime(datetime, true), do: Calendar.strftime(datetime, "%b %d, %Y")
   defp format_datetime(datetime, _), do: Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")

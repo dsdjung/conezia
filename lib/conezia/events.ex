@@ -20,6 +20,8 @@ defmodule Conezia.Events do
     limit = Keyword.get(opts, :limit, 50)
     offset = Keyword.get(opts, :offset, 0)
     type = Keyword.get(opts, :type)
+    search = Keyword.get(opts, :search)
+    sort = Keyword.get(opts, :sort, "date_asc")
     entity_id = Keyword.get(opts, :entity_id)
     date_from = Keyword.get(opts, :date_from)
     date_to = Keyword.get(opts, :date_to)
@@ -27,19 +29,33 @@ defmodule Conezia.Events do
     query =
       from e in Event,
         where: e.user_id == ^user_id,
-        order_by: [asc: e.starts_at],
-        limit: ^limit,
+        limit: ^(limit + 1),
         offset: ^offset,
         preload: [:entities]
 
     events =
       query
       |> filter_by_type(type)
+      |> filter_by_search(search)
       |> filter_by_entity(entity_id)
       |> filter_by_date_range(date_from, date_to)
+      |> apply_sort(sort)
       |> Repo.all()
 
-    {events, %{has_more: length(events) >= limit, next_cursor: nil}}
+    has_more = length(events) > limit
+    events = Enum.take(events, limit)
+
+    {events, %{has_more: has_more, next_cursor: nil}}
+  end
+
+  def count_events(user_id, opts \\ []) do
+    type = Keyword.get(opts, :type)
+    search = Keyword.get(opts, :search)
+
+    from(e in Event, where: e.user_id == ^user_id, select: count(e.id))
+    |> filter_by_type(type)
+    |> filter_by_search(search)
+    |> Repo.one()
   end
 
   def upcoming_events(user_id, days_ahead \\ 30) do
@@ -117,6 +133,20 @@ defmodule Conezia.Events do
 
   defp filter_by_type(query, nil), do: query
   defp filter_by_type(query, type), do: where(query, [e], e.type == ^type)
+
+  defp filter_by_search(query, nil), do: query
+  defp filter_by_search(query, ""), do: query
+
+  defp filter_by_search(query, search) do
+    search_term = "%#{search}%"
+    where(query, [e], ilike(e.title, ^search_term))
+  end
+
+  defp apply_sort(query, "date_desc"), do: order_by(query, [e], desc: e.starts_at)
+  defp apply_sort(query, "title"), do: order_by(query, [e], asc: e.title)
+  defp apply_sort(query, "newest"), do: order_by(query, [e], desc: e.inserted_at)
+  defp apply_sort(query, "oldest"), do: order_by(query, [e], asc: e.inserted_at)
+  defp apply_sort(query, _), do: order_by(query, [e], asc: e.starts_at)
 
   defp filter_by_entity(query, nil), do: query
 
