@@ -163,16 +163,20 @@ defmodule ConeziaWeb.EventLive.FormComponent do
   end
 
   def handle_event("place-selected", %{"address" => address, "place_id" => place_id, "lat" => lat, "lng" => lng}, socket) do
-    params = %{
-      "location" => address,
-      "place_id" => place_id,
-      "latitude" => lat,
-      "longitude" => lng
-    }
+    # Merge location data into current form params to preserve all other fields
+    current_params = socket.assigns.form.params || %{}
+
+    merged_params =
+      Map.merge(current_params, %{
+        "location" => address,
+        "place_id" => place_id,
+        "latitude" => lat,
+        "longitude" => lng
+      })
 
     changeset =
       socket.assigns.event
-      |> Events.change_event(params)
+      |> Events.change_event(maybe_convert_date_to_datetime(merged_params))
 
     {:noreply,
      socket
