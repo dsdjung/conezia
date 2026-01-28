@@ -120,7 +120,7 @@ Hooks.PlacesAutocomplete = {
       const place = this.autocomplete.getPlace()
       if (!place.geometry) return
 
-      this.pushEvent("place-selected", {
+      this.pushEventTo(this.el, "place-selected", {
         address: place.formatted_address || place.name,
         place_id: place.place_id,
         lat: place.geometry.location.lat(),
