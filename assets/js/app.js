@@ -118,7 +118,6 @@ Hooks.SearchableSelect = {
       valueField: "value",
       labelField: "text",
       searchField: "text",
-      dropdownParent: this.el,
       load(query, callback) {
         if (!query.length) return callback()
         hook.pushEventTo(hook.el, "search-entities", { query }, (reply) => {
@@ -129,6 +128,14 @@ Hooks.SearchableSelect = {
       options: preselected,
       items: preselected.map(o => o.value)
     })
+
+    // Prevent Tom Select's body-level dropdown from triggering phx-click-away
+    // which would close the modal
+    if (this.tomSelect.dropdown) {
+      this.tomSelect.dropdown.addEventListener("mousedown", (e) => {
+        e.stopPropagation()
+      })
+    }
   },
   destroyed() {
     if (this.tomSelect) {
