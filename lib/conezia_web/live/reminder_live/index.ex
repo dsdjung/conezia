@@ -326,7 +326,7 @@ defmodule ConeziaWeb.ReminderLive.Index do
   end
 
   defp list_entities_for_select(user_id) do
-    {entities, _meta} = Entities.list_entities(user_id, limit: 100)
+    {entities, _meta} = Entities.list_entities(user_id, limit: 10_000)
     Enum.map(entities, &{&1.name, &1.id})
   end
 
