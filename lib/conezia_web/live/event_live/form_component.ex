@@ -51,7 +51,7 @@ defmodule ConeziaWeb.EventLive.FormComponent do
         <.input field={@form[:all_day]} type="checkbox" label="All day event" />
 
         <div :if={@all_day} class="grid grid-cols-1 gap-4">
-          <.input field={@form[:starts_at]} type="date" label="Date" required />
+          <.input field={@form[:starts_at]} type="date" label="Date" value={@all_day_date} required />
         </div>
         <div :if={!@all_day} class="grid grid-cols-2 gap-4">
           <.input field={@form[:starts_at]} type="datetime-local" label="Start" required />
@@ -97,6 +97,7 @@ defmodule ConeziaWeb.EventLive.FormComponent do
      |> assign(:event_types, @event_types)
      |> assign(:selected_entity_ids, entity_ids)
      |> assign(:all_day, event.all_day || false)
+     |> assign(:all_day_date, if(event.starts_at, do: Calendar.strftime(event.starts_at, "%Y-%m-%d"), else: ""))
      |> assign(:is_recurring, event.is_recurring || false)
      |> assign(:remind_yearly, event.remind_yearly || false)
      |> assign_form(changeset)}
@@ -105,28 +106,23 @@ defmodule ConeziaWeb.EventLive.FormComponent do
   @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
     all_day = event_params["all_day"] == "true"
-
-    # Don't convert date during validate — the date input value would be lost
-    # when the changeset DateTime gets rendered back into a type="date" input.
-    # Only validate non-date fields when all_day is true.
-    validate_params =
-      if all_day do
-        Map.delete(event_params, "starts_at")
-      else
-        event_params
-      end
+    raw_date = event_params["starts_at"]
 
     changeset =
       socket.assigns.event
-      |> Events.change_event(validate_params)
+      |> Events.change_event(maybe_convert_date_to_datetime(event_params))
       |> Map.put(:action, :validate)
 
     is_recurring = event_params["is_recurring"] == "true"
     remind_yearly = event_params["remind_yearly"] == "true"
 
+    # Preserve the raw date string so the date input keeps its value
+    all_day_date = if all_day, do: raw_date || socket.assigns.all_day_date, else: raw_date || ""
+
     {:noreply,
      socket
      |> assign(:all_day, all_day)
+     |> assign(:all_day_date, all_day_date)
      |> assign(:is_recurring, is_recurring)
      |> assign(:remind_yearly, remind_yearly)
      |> assign_form(changeset)}
