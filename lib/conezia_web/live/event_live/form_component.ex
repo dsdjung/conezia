@@ -82,7 +82,7 @@ defmodule ConeziaWeb.EventLive.FormComponent do
         >
         </div>
 
-        <div id="entity-select" phx-hook="SearchableSelect" phx-update="ignore">
+        <div id={"entity-select-#{@event.id || :new}"} phx-hook="SearchableSelect" phx-update="ignore">
           <.input
             field={@form[:entity_ids]}
             type="select"
