@@ -4,6 +4,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
+import TomSelect from "tom-select"
 
 // LiveView Hooks
 let Hooks = {}
@@ -95,6 +96,41 @@ Hooks.Copy = {
         }, 2000)
       })
     })
+  }
+}
+
+// Searchable multi-select using Tom Select
+Hooks.SearchableSelect = {
+  mounted() {
+    const select = this.el.querySelector("select")
+    if (!select) return
+
+    this.tomSelect = new TomSelect(select, {
+      plugins: ["remove_button"],
+      create: false,
+      maxOptions: null
+    })
+  },
+  updated() {
+    // Sync Tom Select with server-rendered options if they change
+    if (this.tomSelect) {
+      const select = this.el.querySelector("select")
+      if (select) {
+        this.tomSelect.clearOptions()
+        this.tomSelect.addOptions(
+          Array.from(select.options).map(o => ({ value: o.value, text: o.text }))
+        )
+        this.tomSelect.setValue(
+          Array.from(select.selectedOptions).map(o => o.value),
+          true
+        )
+      }
+    }
+  },
+  destroyed() {
+    if (this.tomSelect) {
+      this.tomSelect.destroy()
+    }
   }
 }
 

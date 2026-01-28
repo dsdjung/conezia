@@ -81,13 +81,15 @@ defmodule ConeziaWeb.EventLive.FormComponent do
         >
         </div>
 
-        <.input
-          field={@form[:entity_ids]}
-          type="select"
-          label="Connected to"
-          options={@entities}
-          multiple
-        />
+        <div id="entity-select" phx-hook="SearchableSelect" phx-update="ignore">
+          <.input
+            field={@form[:entity_ids]}
+            type="select"
+            label="Connected to"
+            options={@entities}
+            multiple
+          />
+        </div>
 
         <.input :if={!@remind_yearly} field={@form[:is_recurring]} type="checkbox" label="Recurring event" />
         <.input :if={!@is_recurring} field={@form[:remind_yearly]} type="checkbox" label="Remind me every year" />

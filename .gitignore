@@ -34,3 +34,6 @@ conezia-*.tar
 
 # Logo/branding assets
 logo/
+
+# Node.js dependencies
+/assets/node_modules/
