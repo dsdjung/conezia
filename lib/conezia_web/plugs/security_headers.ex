@@ -30,10 +30,11 @@ defmodule ConeziaWeb.Plugs.SecurityHeaders do
   defp content_security_policy do
     [
       "default-src 'self'",
-      "script-src 'self'",
-      "style-src 'self'",
-      "img-src 'self' data: https:",
-      "font-src 'self'",
+      "script-src 'self' https://maps.googleapis.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: https: https://maps.googleapis.com https://maps.gstatic.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "connect-src 'self' https://maps.googleapis.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",

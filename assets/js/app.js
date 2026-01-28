@@ -98,6 +98,82 @@ Hooks.Copy = {
   }
 }
 
+// Google Places Autocomplete hook for location inputs
+Hooks.PlacesAutocomplete = {
+  mounted() {
+    this.initAutocomplete()
+  },
+  initAutocomplete() {
+    if (typeof google === "undefined" || !google.maps || !google.maps.places) {
+      // Google Maps not loaded yet, retry
+      setTimeout(() => this.initAutocomplete(), 200)
+      return
+    }
+
+    const input = this.el.querySelector("input[data-places-input]")
+    if (!input) return
+
+    this.autocomplete = new google.maps.places.Autocomplete(input, {
+      types: ["establishment", "geocode"]
+    })
+
+    this.autocomplete.addListener("place_changed", () => {
+      const place = this.autocomplete.getPlace()
+      if (!place.geometry) return
+
+      this.pushEvent("place-selected", {
+        address: place.formatted_address || place.name,
+        place_id: place.place_id,
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng()
+      })
+    })
+  },
+  destroyed() {
+    if (this.autocomplete) {
+      google.maps.event.clearInstanceListeners(this.autocomplete)
+    }
+  }
+}
+
+// Google Map display hook
+Hooks.GoogleMap = {
+  mounted() {
+    this.initMap()
+  },
+  updated() {
+    this.initMap()
+  },
+  initMap() {
+    if (typeof google === "undefined" || !google.maps) {
+      setTimeout(() => this.initMap(), 200)
+      return
+    }
+
+    const lat = parseFloat(this.el.dataset.lat)
+    const lng = parseFloat(this.el.dataset.lng)
+    if (isNaN(lat) || isNaN(lng)) return
+
+    const position = { lat, lng }
+
+    if (!this.map) {
+      this.map = new google.maps.Map(this.el, {
+        center: position,
+        zoom: 15,
+        disableDefaultUI: true,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false
+      })
+      this.marker = new google.maps.Marker({ position, map: this.map })
+    } else {
+      this.map.setCenter(position)
+      this.marker.setPosition(position)
+    }
+  }
+}
+
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,

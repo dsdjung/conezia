@@ -78,6 +78,10 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
+# Google Maps API key (from environment variables)
+config :conezia, :google_maps,
+  api_key: System.get_env("GOOGLE_MAPS_API_KEY")
+
 # Google OAuth configuration (from environment variables)
 config :conezia, :google_oauth,
   client_id: System.get_env("GOOGLE_CLIENT_ID"),

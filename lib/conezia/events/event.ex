@@ -21,6 +21,9 @@ defmodule Conezia.Events.Event do
     field :all_day, :boolean, default: false
     field :location, :string
     field :location_encrypted, Conezia.Encrypted.Binary
+    field :place_id, :string
+    field :latitude, :float
+    field :longitude, :float
     field :is_recurring, :boolean, default: false
     field :remind_yearly, :boolean, default: false
     field :recurrence_rule, :map
@@ -38,8 +41,8 @@ defmodule Conezia.Events.Event do
 
   @required_fields [:title, :type, :starts_at, :user_id]
   @optional_fields [
-    :description, :ends_at, :all_day, :location, :is_recurring,
-    :remind_yearly, :recurrence_rule, :notes, :reminder_id
+    :description, :ends_at, :all_day, :location, :place_id, :latitude, :longitude,
+    :is_recurring, :remind_yearly, :recurrence_rule, :notes, :reminder_id
   ]
 
   def changeset(event, attrs) do

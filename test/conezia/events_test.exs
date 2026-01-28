@@ -162,6 +162,26 @@ defmodule Conezia.EventsTest do
       assert event.location_encrypted
       assert event.notes_encrypted
     end
+
+    test "creates event with location coordinates" do
+      user = insert(:user)
+
+      attrs = %{
+        title: "Office Meeting",
+        type: "meeting",
+        starts_at: DateTime.utc_now(),
+        location: "1600 Amphitheatre Parkway, Mountain View, CA",
+        place_id: "ChIJj61dQgK6j4AR4GeTYWZsKWw",
+        latitude: 37.4220656,
+        longitude: -122.0840897,
+        user_id: user.id
+      }
+
+      assert {:ok, %Event{} = event} = Events.create_event(attrs)
+      assert event.place_id == "ChIJj61dQgK6j4AR4GeTYWZsKWw"
+      assert_in_delta event.latitude, 37.4220656, 0.0001
+      assert_in_delta event.longitude, -122.0840897, 0.0001
+    end
   end
 
   describe "list_events/2" do

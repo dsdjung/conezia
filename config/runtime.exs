@@ -106,6 +106,14 @@ if config_env() == :prod do
   config :conezia, Conezia.Vault,
     secret_key: vault_key
 
+  # Google Maps API key - OPTIONAL for location autocomplete and maps
+  google_maps_api_key = System.get_env("GOOGLE_MAPS_API_KEY")
+
+  if google_maps_api_key do
+    config :conezia, :google_maps,
+      api_key: google_maps_api_key
+  end
+
   # Google OAuth configuration - REQUIRED for Google Sign-In
   google_client_id =
     System.get_env("GOOGLE_CLIENT_ID") ||

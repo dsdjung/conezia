@@ -25,3 +25,8 @@ Additional possible considerations for deduplicating
 - further sync should now be able to refer to the combined connection if id match
 
 If I sync again, we need to handle a case where there is changed data for a connection from the last time it was synced.
+
+shared experience?
+
+Connected to field for creating event should be searchable, and select multiple connections
+

@@ -1785,6 +1785,16 @@ defmodule ConeziaWeb.EntityLive.Show do
                     {humanize_type(event.type)}
                   </.badge>
                 </div>
+                <div
+                  :if={event.latitude && event.longitude}
+                  id={"entity-event-map-#{event.id}"}
+                  phx-hook="GoogleMap"
+                  phx-update="ignore"
+                  data-lat={event.latitude}
+                  data-lng={event.longitude}
+                  class="mt-2 h-32 w-full rounded-lg border border-gray-200"
+                >
+                </div>
               </li>
             </ul>
           </.card>

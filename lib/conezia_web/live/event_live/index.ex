@@ -141,6 +141,16 @@ defmodule ConeziaWeb.EventLive.Index do
                     {event.location}
                   </span>
                 </div>
+                <div
+                  :if={event.latitude && event.longitude}
+                  id={"event-map-#{event.id}"}
+                  phx-hook="GoogleMap"
+                  phx-update="ignore"
+                  data-lat={event.latitude}
+                  data-lng={event.longitude}
+                  class="mt-2 h-32 w-full rounded-lg border border-gray-200"
+                >
+                </div>
                 <div :if={event.entities != []} class="mt-1 flex items-center gap-1 text-xs text-gray-500">
                   <span class="hero-users h-4 w-4" />
                   <span :for={entity <- event.entities} class="inline-flex">
