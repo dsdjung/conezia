@@ -67,8 +67,8 @@ defmodule ConeziaWeb.EventLive.FormComponent do
           multiple
         />
 
-        <.input field={@form[:is_recurring]} type="checkbox" label="Recurring event" />
-        <.input field={@form[:remind_yearly]} type="checkbox" label="Remind me every year" />
+        <.input :if={!@remind_yearly} field={@form[:is_recurring]} type="checkbox" label="Recurring event" />
+        <.input :if={!@is_recurring} field={@form[:remind_yearly]} type="checkbox" label="Remind me every year" />
 
         <.input field={@form[:description]} type="textarea" label="Description" />
         <.input field={@form[:notes]} type="textarea" label="Notes" />
@@ -97,23 +97,38 @@ defmodule ConeziaWeb.EventLive.FormComponent do
      |> assign(:event_types, @event_types)
      |> assign(:selected_entity_ids, entity_ids)
      |> assign(:all_day, event.all_day || false)
+     |> assign(:is_recurring, event.is_recurring || false)
+     |> assign(:remind_yearly, event.remind_yearly || false)
      |> assign_form(changeset)}
   end
 
   @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
-    event_params = maybe_convert_date_to_datetime(event_params)
+    all_day = event_params["all_day"] == "true"
+
+    # Don't convert date during validate — the date input value would be lost
+    # when the changeset DateTime gets rendered back into a type="date" input.
+    # Only validate non-date fields when all_day is true.
+    validate_params =
+      if all_day do
+        Map.delete(event_params, "starts_at")
+      else
+        event_params
+      end
 
     changeset =
       socket.assigns.event
-      |> Events.change_event(event_params)
+      |> Events.change_event(validate_params)
       |> Map.put(:action, :validate)
 
-    all_day = event_params["all_day"] == "true"
+    is_recurring = event_params["is_recurring"] == "true"
+    remind_yearly = event_params["remind_yearly"] == "true"
 
     {:noreply,
      socket
      |> assign(:all_day, all_day)
+     |> assign(:is_recurring, is_recurring)
+     |> assign(:remind_yearly, remind_yearly)
      |> assign_form(changeset)}
   end
 
