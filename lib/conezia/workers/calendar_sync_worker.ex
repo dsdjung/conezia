@@ -151,12 +151,15 @@ defmodule Conezia.Workers.CalendarSyncWorker do
   end
 
   defp create_event_from_external(ext_event, user_id, account) do
+    starts_at = ext_event[:starts_at] || ext_event["starts_at"]
+    ends_at = ext_event[:ends_at] || ext_event["ends_at"]
+
     attrs = %{
       title: ext_event[:title] || ext_event["title"],
       description: ext_event[:description] || ext_event["description"],
       location: ext_event[:location] || ext_event["location"],
-      starts_at: ext_event[:starts_at] || ext_event["starts_at"],
-      ends_at: ext_event[:ends_at] || ext_event["ends_at"],
+      starts_at: ensure_usec_precision(starts_at),
+      ends_at: ensure_usec_precision(ends_at),
       all_day: ext_event[:all_day] || ext_event["all_day"] || false,
       type: "other",
       user_id: user_id,
@@ -184,12 +187,15 @@ defmodule Conezia.Workers.CalendarSyncWorker do
     if current_etag && current_etag == new_etag do
       {:ok, :skipped}
     else
+      starts_at = ext_event[:starts_at] || ext_event["starts_at"]
+      ends_at = ext_event[:ends_at] || ext_event["ends_at"]
+
       attrs = %{
         title: ext_event[:title] || ext_event["title"],
         description: ext_event[:description] || ext_event["description"],
         location: ext_event[:location] || ext_event["location"],
-        starts_at: ext_event[:starts_at] || ext_event["starts_at"],
-        ends_at: ext_event[:ends_at] || ext_event["ends_at"],
+        starts_at: ensure_usec_precision(starts_at),
+        ends_at: ensure_usec_precision(ends_at),
         all_day: ext_event[:all_day] || ext_event["all_day"] || false,
         external_id: ext_event[:external_id] || ext_event["external_id"],
         external_account_id: account.id,
@@ -344,6 +350,13 @@ defmodule Conezia.Workers.CalendarSyncWorker do
       ends_at: event.ends_at,
       all_day: event.all_day
     }
+  end
+
+  # Ensures DateTime has microsecond precision (required for :utc_datetime_usec fields)
+  defp ensure_usec_precision(nil), do: nil
+  defp ensure_usec_precision(%DateTime{microsecond: {_, 6}} = dt), do: dt
+  defp ensure_usec_precision(%DateTime{} = dt) do
+    %{dt | microsecond: {elem(dt.microsecond, 0), 6}}
   end
 
   defp broadcast_status(user_id, status, payload) do
