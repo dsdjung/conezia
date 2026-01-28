@@ -57,29 +57,7 @@ defmodule ConeziaWeb.EventLive.FormComponent do
           <.input field={@form[:starts_at]} type="datetime-local" label="Start" required />
           <.input field={@form[:ends_at]} type="datetime-local" label="End (optional)" />
         </div>
-        <div id="location-autocomplete" phx-hook="PlacesAutocomplete" phx-target={@myself}>
-          <.input
-            field={@form[:location]}
-            type="text"
-            label="Location (optional)"
-            data-places-input="true"
-            autocomplete="off"
-          />
-          <input type="hidden" name="event[place_id]" value={@form[:place_id].value} />
-          <input type="hidden" name="event[latitude]" value={@form[:latitude].value} />
-          <input type="hidden" name="event[longitude]" value={@form[:longitude].value} />
-        </div>
-
-        <div
-          :if={@latitude && @longitude}
-          id="location-map-preview"
-          phx-hook="GoogleMap"
-          phx-update="ignore"
-          data-lat={@latitude}
-          data-lng={@longitude}
-          class="h-48 w-full rounded-lg border border-gray-200 mt-2"
-        >
-        </div>
+        <.input field={@form[:location]} type="text" label="Location (optional)" />
 
         <.input
           field={@form[:entity_ids]}
@@ -122,8 +100,6 @@ defmodule ConeziaWeb.EventLive.FormComponent do
      |> assign(:all_day_date, if(event.starts_at, do: Calendar.strftime(event.starts_at, "%Y-%m-%d"), else: ""))
      |> assign(:is_recurring, event.is_recurring || false)
      |> assign(:remind_yearly, event.remind_yearly || false)
-     |> assign(:latitude, event.latitude)
-     |> assign(:longitude, event.longitude)
      |> assign_form(changeset)}
   end
 
@@ -149,25 +125,6 @@ defmodule ConeziaWeb.EventLive.FormComponent do
      |> assign(:all_day_date, all_day_date)
      |> assign(:is_recurring, is_recurring)
      |> assign(:remind_yearly, remind_yearly)
-     |> assign_form(changeset)}
-  end
-
-  def handle_event("place-selected", %{"address" => address, "place_id" => place_id, "lat" => lat, "lng" => lng}, socket) do
-    params = %{
-      "location" => address,
-      "place_id" => place_id,
-      "latitude" => lat,
-      "longitude" => lng
-    }
-
-    changeset =
-      socket.assigns.event
-      |> Events.change_event(params)
-
-    {:noreply,
-     socket
-     |> assign(:latitude, lat)
-     |> assign(:longitude, lng)
      |> assign_form(changeset)}
   end
 

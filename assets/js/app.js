@@ -98,44 +98,6 @@ Hooks.Copy = {
   }
 }
 
-// Google Places Autocomplete hook for location inputs
-Hooks.PlacesAutocomplete = {
-  mounted() {
-    this.initAutocomplete()
-  },
-  initAutocomplete() {
-    if (typeof google === "undefined" || !google.maps || !google.maps.places) {
-      // Google Maps not loaded yet, retry
-      setTimeout(() => this.initAutocomplete(), 200)
-      return
-    }
-
-    const input = this.el.querySelector("input[data-places-input]")
-    if (!input) return
-
-    this.autocomplete = new google.maps.places.Autocomplete(input, {
-      types: ["establishment", "geocode"]
-    })
-
-    this.autocomplete.addListener("place_changed", () => {
-      const place = this.autocomplete.getPlace()
-      if (!place.geometry) return
-
-      this.pushEvent("place-selected", {
-        address: place.formatted_address || place.name,
-        place_id: place.place_id,
-        lat: place.geometry.location.lat(),
-        lng: place.geometry.location.lng()
-      })
-    })
-  },
-  destroyed() {
-    if (this.autocomplete) {
-      google.maps.event.clearInstanceListeners(this.autocomplete)
-    }
-  }
-}
-
 // Google Map display hook
 Hooks.GoogleMap = {
   mounted() {
