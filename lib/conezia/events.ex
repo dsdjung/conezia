@@ -78,6 +78,51 @@ defmodule Conezia.Events do
     |> Repo.all()
   end
 
+  @doc """
+  Lists events for a specific month (for calendar view).
+  Returns events grouped by date.
+  """
+  def list_events_for_month(user_id, year, month, opts \\ []) do
+    entity_id = Keyword.get(opts, :entity_id)
+    type = Keyword.get(opts, :type)
+
+    # Get first and last day of the month
+    first_day = Date.new!(year, month, 1)
+    last_day = Date.end_of_month(first_day)
+
+    # Extend to include surrounding weeks for calendar display
+    # Go back to the start of the week containing the first day
+    days_since_sunday = Date.day_of_week(first_day, :sunday) - 1
+    calendar_start = Date.add(first_day, -days_since_sunday)
+
+    # Go forward to the end of the week containing the last day
+    days_until_saturday = 7 - Date.day_of_week(last_day, :sunday)
+    calendar_end = Date.add(last_day, days_until_saturday)
+
+    start_datetime = DateTime.new!(calendar_start, ~T[00:00:00], "Etc/UTC")
+    end_datetime = DateTime.new!(calendar_end, ~T[23:59:59], "Etc/UTC")
+
+    query =
+      from(e in Event,
+        where: e.user_id == ^user_id,
+        where: e.starts_at >= ^start_datetime and e.starts_at <= ^end_datetime,
+        order_by: [asc: e.starts_at],
+        preload: [:entities]
+      )
+
+    events =
+      query
+      |> filter_by_type(type)
+      |> filter_by_entity(entity_id)
+      |> Repo.all()
+
+    # Group events by date
+    events
+    |> Enum.group_by(fn event ->
+      event.starts_at |> DateTime.to_date()
+    end)
+  end
+
   def create_event(attrs) do
     %Event{}
     |> Event.changeset(attrs)

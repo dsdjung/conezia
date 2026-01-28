@@ -311,6 +311,89 @@ defmodule Conezia.EventsTest do
     end
   end
 
+  describe "list_events_for_month/4" do
+    test "returns events grouped by date for a given month" do
+      user = insert(:user)
+      # Create events in February 2026
+      {:ok, event1} = Events.create_event(%{
+        title: "Event on Feb 5",
+        type: "meeting",
+        starts_at: ~U[2026-02-05 10:00:00Z],
+        user_id: user.id
+      })
+      {:ok, event2} = Events.create_event(%{
+        title: "Event on Feb 15",
+        type: "dinner",
+        starts_at: ~U[2026-02-15 18:00:00Z],
+        user_id: user.id
+      })
+      {:ok, event3} = Events.create_event(%{
+        title: "Another on Feb 5",
+        type: "meeting",
+        starts_at: ~U[2026-02-05 14:00:00Z],
+        user_id: user.id
+      })
+
+      events_by_date = Events.list_events_for_month(user.id, 2026, 2)
+
+      # Check that events are grouped by date
+      feb5 = ~D[2026-02-05]
+      feb15 = ~D[2026-02-15]
+
+      assert is_map(events_by_date)
+      assert length(Map.get(events_by_date, feb5, [])) == 2
+      assert length(Map.get(events_by_date, feb15, [])) == 1
+
+      # Check event IDs are correct
+      feb5_ids = Enum.map(Map.get(events_by_date, feb5, []), & &1.id)
+      assert event1.id in feb5_ids
+      assert event3.id in feb5_ids
+
+      # Silence unused variable warning
+      _ = event2
+    end
+
+    test "includes events from surrounding weeks for calendar display" do
+      user = insert(:user)
+      # March 2026 starts on Sunday, but March 31 is a Tuesday
+      # So the calendar should include events from early April (Apr 1-4)
+      {:ok, event} = Events.create_event(%{
+        title: "Event in display range",
+        type: "meeting",
+        starts_at: ~U[2026-04-02 10:00:00Z],  # April 2 (in the last week row of March calendar)
+        user_id: user.id
+      })
+
+      events_by_date = Events.list_events_for_month(user.id, 2026, 3)
+
+      apr2 = ~D[2026-04-02]
+      assert length(Map.get(events_by_date, apr2, [])) == 1
+      assert hd(Map.get(events_by_date, apr2)).id == event.id
+    end
+
+    test "filters by type" do
+      user = insert(:user)
+      {:ok, meeting} = Events.create_event(%{
+        title: "Team Meeting",
+        type: "meeting",
+        starts_at: ~U[2026-02-10 10:00:00Z],
+        user_id: user.id
+      })
+      {:ok, _dinner} = Events.create_event(%{
+        title: "Dinner",
+        type: "dinner",
+        starts_at: ~U[2026-02-10 18:00:00Z],
+        user_id: user.id
+      })
+
+      events_by_date = Events.list_events_for_month(user.id, 2026, 2, type: "meeting")
+
+      feb10 = ~D[2026-02-10]
+      assert length(Map.get(events_by_date, feb10, [])) == 1
+      assert hd(Map.get(events_by_date, feb10)).id == meeting.id
+    end
+  end
+
   describe "count_events/2" do
     test "counts all events for user" do
       user = insert(:user)
