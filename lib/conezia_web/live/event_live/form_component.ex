@@ -5,6 +5,7 @@ defmodule ConeziaWeb.EventLive.FormComponent do
   use ConeziaWeb, :live_component
 
   alias Conezia.Events
+  alias Conezia.Entities
 
   @event_types [
     {"Birthday", "birthday"},
@@ -152,6 +153,13 @@ defmodule ConeziaWeb.EventLive.FormComponent do
      |> assign(:is_recurring, is_recurring)
      |> assign(:remind_yearly, remind_yearly)
      |> assign_form(changeset)}
+  end
+
+  def handle_event("search-entities", %{"query" => query}, socket) do
+    user_id = socket.assigns.current_user.id
+    {entities, _meta} = Entities.list_entities(user_id, search: query, limit: 20)
+    results = Enum.map(entities, fn e -> %{value: e.id, text: e.name} end)
+    {:reply, %{results: results}, socket}
   end
 
   def handle_event("place-selected", %{"address" => address, "place_id" => place_id, "lat" => lat, "lng" => lng}, socket) do

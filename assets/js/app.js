@@ -99,33 +99,35 @@ Hooks.Copy = {
   }
 }
 
-// Searchable multi-select using Tom Select
+// Searchable multi-select using Tom Select with server-side search
 Hooks.SearchableSelect = {
   mounted() {
     const select = this.el.querySelector("select")
     if (!select) return
 
+    // Capture pre-selected options before Tom Select takes over
+    const preselected = Array.from(select.selectedOptions).map(o => ({
+      value: o.value, text: o.text
+    }))
+
+    const hook = this
+
     this.tomSelect = new TomSelect(select, {
       plugins: ["remove_button"],
       create: false,
-      maxOptions: null
+      valueField: "value",
+      labelField: "text",
+      searchField: "text",
+      load(query, callback) {
+        if (!query.length) return callback()
+        hook.pushEventTo(hook.el, "search-entities", { query }, (reply) => {
+          callback(reply.results)
+        })
+      },
+      // Pre-populate with initially selected items
+      options: preselected,
+      items: preselected.map(o => o.value)
     })
-  },
-  updated() {
-    // Sync Tom Select with server-rendered options if they change
-    if (this.tomSelect) {
-      const select = this.el.querySelector("select")
-      if (select) {
-        this.tomSelect.clearOptions()
-        this.tomSelect.addOptions(
-          Array.from(select.options).map(o => ({ value: o.value, text: o.text }))
-        )
-        this.tomSelect.setValue(
-          Array.from(select.selectedOptions).map(o => o.value),
-          true
-        )
-      }
-    }
   },
   destroyed() {
     if (this.tomSelect) {

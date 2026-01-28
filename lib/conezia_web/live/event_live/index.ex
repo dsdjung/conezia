@@ -6,7 +6,6 @@ defmodule ConeziaWeb.EventLive.Index do
 
   alias Conezia.Events
   alias Conezia.Events.Event
-  alias Conezia.Entities
 
   @impl true
   def mount(_params, _session, socket) do
@@ -31,7 +30,7 @@ defmodule ConeziaWeb.EventLive.Index do
     socket
     |> assign(:page_title, "New Event")
     |> assign(:event, %Event{})
-    |> assign(:entities, list_entities_for_select(socket.assigns.current_user.id))
+    |> assign(:entities, [])
   end
 
   defp apply_action(socket, :edit, %{"id" => id}) do
@@ -39,10 +38,17 @@ defmodule ConeziaWeb.EventLive.Index do
     event = Events.get_event_for_user(id, user.id)
 
     if event do
+      selected_entities =
+        case event do
+          %{entities: entities} when is_list(entities) ->
+            Enum.map(entities, &{&1.name, &1.id})
+          _ -> []
+        end
+
       socket
       |> assign(:page_title, "Edit Event")
       |> assign(:event, event)
-      |> assign(:entities, list_entities_for_select(user.id))
+      |> assign(:entities, selected_entities)
     else
       socket
       |> put_flash(:error, "Event not found")
@@ -209,10 +215,6 @@ defmodule ConeziaWeb.EventLive.Index do
     """
   end
 
-  defp list_entities_for_select(user_id) do
-    {entities, _meta} = Entities.list_entities(user_id, limit: 10_000)
-    Enum.map(entities, &{&1.name, &1.id})
-  end
 
   defp format_datetime(datetime, true), do: Calendar.strftime(datetime, "%b %d, %Y")
   defp format_datetime(datetime, _), do: Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")
