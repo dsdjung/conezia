@@ -118,6 +118,7 @@ Hooks.SearchableSelect = {
       valueField: "value",
       labelField: "text",
       searchField: "text",
+      dropdownParent: this.el,
       load(query, callback) {
         if (!query.length) return callback()
         hook.pushEventTo(hook.el, "search-entities", { query }, (reply) => {
