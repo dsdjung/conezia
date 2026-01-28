@@ -102,6 +102,8 @@ defmodule ConeziaWeb.EventLive.FormComponent do
 
   @impl true
   def handle_event("validate", %{"event" => event_params}, socket) do
+    event_params = maybe_convert_date_to_datetime(event_params)
+
     changeset =
       socket.assigns.event
       |> Events.change_event(event_params)
