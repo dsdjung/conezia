@@ -310,6 +310,17 @@ defmodule Conezia.EventsTest do
 
       assert Events.count_events(user.id, type: "meeting") == 1
     end
+
+    test "counts with entity_id filter" do
+      user = insert(:user)
+      entity = insert(:entity, owner: user)
+      event = insert(:event, user: user)
+      insert(:event, user: user)
+
+      Events.add_entity_to_event(event.id, entity.id)
+
+      assert Events.count_events(user.id, entity_id: entity.id) == 1
+    end
   end
 
   describe "upcoming_events/2" do

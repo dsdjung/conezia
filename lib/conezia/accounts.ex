@@ -33,9 +33,19 @@ defmodule Conezia.Accounts do
   end
 
   def create_user(attrs) do
-    %User{}
-    |> User.registration_changeset(attrs)
-    |> Repo.insert()
+    result =
+      %User{}
+      |> User.registration_changeset(attrs)
+      |> Repo.insert()
+
+    case result do
+      {:ok, user} ->
+        Conezia.Entities.create_self_entity(user)
+        {:ok, user}
+
+      error ->
+        error
+    end
   end
 
   def update_user(%User{} = user, attrs) do
@@ -112,6 +122,7 @@ defmodule Conezia.Accounts do
              provider_uid: provider_uid,
              user_id: user.id
            }) do
+        Conezia.Entities.create_self_entity(user)
         user
       else
         {:error, changeset} -> Repo.rollback(changeset)

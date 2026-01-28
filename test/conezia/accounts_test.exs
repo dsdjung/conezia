@@ -79,6 +79,20 @@ defmodule Conezia.AccountsTest do
       assert user.hashed_password
     end
 
+    test "auto-creates self entity on user creation" do
+      attrs = %{
+        email: "selftest@example.com",
+        password: "Password123",
+        name: "Self Test"
+      }
+
+      assert {:ok, %User{} = user} = Accounts.create_user(attrs)
+      self_entity = Conezia.Entities.get_self_entity(user.id)
+      assert self_entity
+      assert self_entity.is_self == true
+      assert self_entity.name == "Self Test"
+    end
+
     test "fails with invalid email" do
       attrs = %{email: "invalid", password: "Password123"}
       assert {:error, changeset} = Accounts.create_user(attrs)

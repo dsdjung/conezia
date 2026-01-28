@@ -18,6 +18,23 @@ defmodule Conezia.Entities do
     |> Repo.one()
   end
 
+  def get_self_entity(user_id) do
+    Entity
+    |> where([e], e.owner_id == ^user_id and e.is_self == true)
+    |> Repo.one()
+  end
+
+  def create_self_entity(user) do
+    %Entity{}
+    |> Entity.changeset(%{
+      type: "person",
+      name: user.name || user.email,
+      owner_id: user.id,
+      is_self: true
+    })
+    |> Repo.insert()
+  end
+
   @valid_sort_options ~w(name name_desc last_interaction recent oldest)
 
   def list_entities(user_id, opts \\ []) do

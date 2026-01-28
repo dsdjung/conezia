@@ -18,6 +18,7 @@ defmodule Conezia.Entities.Entity do
     field :avatar_url, :string
     field :metadata, :map, default: %{}
     field :last_interaction_at, :utc_datetime_usec
+    field :is_self, :boolean, default: false
     field :archived_at, :utc_datetime_usec
 
     # Demographic/profile fields
@@ -45,7 +46,7 @@ defmodule Conezia.Entities.Entity do
 
   @required_fields [:type, :name, :owner_id]
   @optional_fields [
-    :description, :avatar_url, :metadata, :last_interaction_at, :archived_at,
+    :description, :avatar_url, :metadata, :last_interaction_at, :archived_at, :is_self,
     :country, :timezone, :nationality, :ethnicity, :languages, :preferred_language
   ]
 
@@ -63,6 +64,7 @@ defmodule Conezia.Entities.Entity do
     |> validate_length(:preferred_language, max: 8)
     |> validate_url(:avatar_url)
     |> foreign_key_constraint(:owner_id)
+    |> unique_constraint(:is_self, name: :entities_one_self_per_owner, message: "user already has a self entity")
     |> encrypt_description()
   end
 

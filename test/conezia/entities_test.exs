@@ -1371,4 +1371,38 @@ defmodule Conezia.EntitiesTest do
       assert is_nil(EntityRelationship.inverse_of("friend"))
     end
   end
+
+  describe "self entity" do
+    test "create_self_entity/1 creates a self entity for a user" do
+      user = insert(:user)
+      assert {:ok, %Entity{} = entity} = Entities.create_self_entity(user)
+      assert entity.is_self == true
+      assert entity.owner_id == user.id
+      assert entity.type == "person"
+      assert entity.name == user.name
+    end
+
+    test "create_self_entity/1 uses email when name is nil" do
+      user = insert(:user, name: nil)
+      assert {:ok, %Entity{} = entity} = Entities.create_self_entity(user)
+      assert entity.name == user.email
+    end
+
+    test "get_self_entity/1 returns the self entity" do
+      user = insert(:user)
+      {:ok, self_entity} = Entities.create_self_entity(user)
+      assert Entities.get_self_entity(user.id).id == self_entity.id
+    end
+
+    test "get_self_entity/1 returns nil when no self entity exists" do
+      user = insert(:user)
+      assert is_nil(Entities.get_self_entity(user.id))
+    end
+
+    test "only one self entity per user" do
+      user = insert(:user)
+      assert {:ok, _} = Entities.create_self_entity(user)
+      assert {:error, _} = Entities.create_self_entity(user)
+    end
+  end
 end

@@ -6,12 +6,14 @@ defmodule ConeziaWeb.EventLive.Index do
 
   alias Conezia.Events
   alias Conezia.Events.Event
+  alias Conezia.Entities
 
   @page_size 25
 
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns.current_user
+    self_entity = Entities.get_self_entity(user.id)
     {events, meta} = Events.list_events(user.id, limit: @page_size)
     total_count = Events.count_events(user.id)
 
@@ -21,6 +23,8 @@ defmodule ConeziaWeb.EventLive.Index do
       |> assign(:search, "")
       |> assign(:type_filter, nil)
       |> assign(:sort, "date_asc")
+      |> assign(:involvement, "all")
+      |> assign(:self_entity_id, self_entity && self_entity.id)
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
       |> assign(:loading, false)
@@ -85,6 +89,10 @@ defmodule ConeziaWeb.EventLive.Index do
     {:noreply, load_events(assign(socket, :sort, sort))}
   end
 
+  def handle_event("filter_involvement", %{"involvement" => involvement}, socket) do
+    {:noreply, load_events(assign(socket, :involvement, involvement))}
+  end
+
   def handle_event("load-more", _params, socket) do
     if socket.assigns.loading or not socket.assigns.has_more do
       {:noreply, socket}
@@ -99,6 +107,7 @@ defmodule ConeziaWeb.EventLive.Index do
         search: socket.assigns.search,
         type: socket.assigns.type_filter,
         sort: socket.assigns.sort,
+        entity_id: involvement_entity_id(socket.assigns),
         limit: @page_size,
         offset: offset
       )
@@ -156,6 +165,15 @@ defmodule ConeziaWeb.EventLive.Index do
               {@total_count} {if @total_count == 1, do: "event", else: "events"}
             </h3>
             <div class="flex items-center gap-2">
+              <form :if={@self_entity_id} phx-change="filter_involvement">
+                <select
+                  name="involvement"
+                  class="block rounded-md border-gray-300 text-xs focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="all" selected={@involvement == "all"}>All Events</option>
+                  <option value="mine" selected={@involvement == "mine"}>My Events</option>
+                </select>
+              </form>
               <form phx-change="filter_type">
                 <select
                   name="type"
@@ -286,17 +304,20 @@ defmodule ConeziaWeb.EventLive.Index do
 
   defp load_events(socket) do
     user = socket.assigns.current_user
+    entity_filter = involvement_entity_id(socket.assigns)
 
     {events, meta} = Events.list_events(user.id,
       search: socket.assigns.search,
       type: socket.assigns.type_filter,
       sort: socket.assigns.sort,
+      entity_id: entity_filter,
       limit: @page_size
     )
 
     total_count = Events.count_events(user.id,
       search: socket.assigns.search,
-      type: socket.assigns.type_filter
+      type: socket.assigns.type_filter,
+      entity_id: entity_filter
     )
 
     socket
@@ -305,6 +326,9 @@ defmodule ConeziaWeb.EventLive.Index do
     |> assign(:total_count, total_count)
     |> stream(:events, events, reset: true)
   end
+
+  defp involvement_entity_id(%{involvement: "mine", self_entity_id: id}) when not is_nil(id), do: id
+  defp involvement_entity_id(_), do: nil
 
   defp format_datetime(datetime, true), do: Calendar.strftime(datetime, "%b %d, %Y")
   defp format_datetime(datetime, _), do: Calendar.strftime(datetime, "%b %d, %Y at %I:%M %p")

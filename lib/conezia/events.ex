@@ -51,10 +51,12 @@ defmodule Conezia.Events do
   def count_events(user_id, opts \\ []) do
     type = Keyword.get(opts, :type)
     search = Keyword.get(opts, :search)
+    entity_id = Keyword.get(opts, :entity_id)
 
     from(e in Event, where: e.user_id == ^user_id, select: count(e.id))
     |> filter_by_type(type)
     |> filter_by_search(search)
+    |> filter_by_entity(entity_id)
     |> Repo.one()
   end
 
