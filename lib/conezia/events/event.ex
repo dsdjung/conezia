@@ -30,8 +30,15 @@ defmodule Conezia.Events.Event do
     field :notes, :string
     field :notes_encrypted, Conezia.Encrypted.Binary
 
+    # Calendar sync fields
+    field :external_id, :string
+    field :sync_status, :string, default: "local_only"
+    field :sync_metadata, :map, default: %{}
+    field :last_synced_at, :utc_datetime_usec
+
     belongs_to :user, Conezia.Accounts.User
     belongs_to :reminder, Conezia.Reminders.Reminder
+    belongs_to :external_account, Conezia.ExternalAccounts.ExternalAccount
 
     many_to_many :entities, Conezia.Entities.Entity,
       join_through: "event_entities"
@@ -40,9 +47,12 @@ defmodule Conezia.Events.Event do
   end
 
   @required_fields [:title, :type, :starts_at, :user_id]
+  @sync_statuses ~w(local_only synced pending_push pending_pull conflict)
+
   @optional_fields [
     :description, :ends_at, :all_day, :location, :place_id, :latitude, :longitude,
-    :is_recurring, :remind_yearly, :recurrence_rule, :notes, :reminder_id
+    :is_recurring, :remind_yearly, :recurrence_rule, :notes, :reminder_id,
+    :external_id, :external_account_id, :sync_status, :sync_metadata, :last_synced_at
   ]
 
   def changeset(event, attrs) do
@@ -56,9 +66,11 @@ defmodule Conezia.Events.Event do
     |> validate_length(:notes, max: 10_000)
     |> validate_recurrence_rule()
     |> validate_end_time()
+    |> validate_inclusion(:sync_status, @sync_statuses)
     |> encrypt_fields()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:reminder_id)
+    |> foreign_key_constraint(:external_account_id)
   end
 
   defp validate_recurrence_rule(changeset) do
@@ -98,4 +110,5 @@ defmodule Conezia.Events.Event do
   end
 
   def valid_types, do: @event_types
+  def valid_sync_statuses, do: @sync_statuses
 end

@@ -453,4 +453,244 @@ defmodule Conezia.EventsTest do
       assert Events.get_event_for_user(event.id, user2.id) == nil
     end
   end
+
+  describe "find_by_external_id/2" do
+    test "returns event with matching external_id" do
+        user = insert(:user)
+        account = insert(:external_account, user: user, service_name: "google")
+
+        {:ok, event} = Events.create_event(%{
+          title: "Synced Event",
+          type: "meeting",
+          starts_at: DateTime.utc_now(),
+          user_id: user.id,
+          external_id: "google_123",
+          external_account_id: account.id
+        })
+
+        found = Events.find_by_external_id(user.id, "google_123")
+        assert found.id == event.id
+      end
+
+      test "returns nil for non-existent external_id" do
+        user = insert(:user)
+        assert Events.find_by_external_id(user.id, "nonexistent") == nil
+      end
+
+      test "does not return events from other users" do
+        user1 = insert(:user)
+        user2 = insert(:user)
+        account = insert(:external_account, user: user1, service_name: "google")
+
+        {:ok, _event} = Events.create_event(%{
+          title: "User1 Event",
+          type: "meeting",
+          starts_at: DateTime.utc_now(),
+          user_id: user1.id,
+          external_id: "google_123",
+          external_account_id: account.id
+        })
+
+        assert Events.find_by_external_id(user2.id, "google_123") == nil
+    end
+  end
+
+  describe "find_matching_event/2" do
+    test "finds event with exact title and matching time" do
+        user = insert(:user)
+        base_time = ~U[2026-02-01 10:00:00Z]
+
+        {:ok, event} = Events.create_event(%{
+          title: "Team Meeting",
+          type: "meeting",
+          starts_at: base_time,
+          user_id: user.id
+        })
+
+        found = Events.find_matching_event(user.id, %{title: "Team Meeting", starts_at: base_time})
+        assert found.id == event.id
+      end
+
+      test "finds event within 1 hour tolerance" do
+        user = insert(:user)
+        base_time = ~U[2026-02-01 10:00:00Z]
+
+        {:ok, event} = Events.create_event(%{
+          title: "Team Meeting",
+          type: "meeting",
+          starts_at: base_time,
+          user_id: user.id
+        })
+
+        # 30 minutes later - should match
+        search_time = DateTime.add(base_time, 1800, :second)
+        found = Events.find_matching_event(user.id, %{title: "Team Meeting", starts_at: search_time})
+        assert found.id == event.id
+
+        # 30 minutes earlier - should match
+        search_time = DateTime.add(base_time, -1800, :second)
+        found = Events.find_matching_event(user.id, %{title: "Team Meeting", starts_at: search_time})
+        assert found.id == event.id
+      end
+
+      test "does not find event outside 1 hour tolerance" do
+        user = insert(:user)
+        base_time = ~U[2026-02-01 10:00:00Z]
+
+        {:ok, _event} = Events.create_event(%{
+          title: "Team Meeting",
+          type: "meeting",
+          starts_at: base_time,
+          user_id: user.id
+        })
+
+        # 2 hours later - should not match
+        search_time = DateTime.add(base_time, 7200, :second)
+        assert Events.find_matching_event(user.id, %{title: "Team Meeting", starts_at: search_time}) == nil
+      end
+
+      test "title matching is case-insensitive" do
+        user = insert(:user)
+        base_time = ~U[2026-02-01 10:00:00Z]
+
+        {:ok, event} = Events.create_event(%{
+          title: "Team Meeting",
+          type: "meeting",
+          starts_at: base_time,
+          user_id: user.id
+        })
+
+        found = Events.find_matching_event(user.id, %{title: "TEAM MEETING", starts_at: base_time})
+        assert found.id == event.id
+
+        found = Events.find_matching_event(user.id, %{title: "team meeting", starts_at: base_time})
+        assert found.id == event.id
+      end
+
+      test "trims whitespace when matching titles" do
+        user = insert(:user)
+        base_time = ~U[2026-02-01 10:00:00Z]
+
+        {:ok, event} = Events.create_event(%{
+          title: "Team Meeting",
+          type: "meeting",
+          starts_at: base_time,
+          user_id: user.id
+        })
+
+        found = Events.find_matching_event(user.id, %{title: "  Team Meeting  ", starts_at: base_time})
+        assert found.id == event.id
+      end
+
+      test "does not match events from other users" do
+        user1 = insert(:user)
+        user2 = insert(:user)
+        base_time = ~U[2026-02-01 10:00:00Z]
+
+        {:ok, _event} = Events.create_event(%{
+          title: "Team Meeting",
+          type: "meeting",
+          starts_at: base_time,
+          user_id: user1.id
+        })
+
+        assert Events.find_matching_event(user2.id, %{title: "Team Meeting", starts_at: base_time}) == nil
+    end
+  end
+
+  describe "update_sync_status/2" do
+    test "updates sync fields" do
+        user = insert(:user)
+
+        {:ok, event} = Events.create_event(%{
+          title: "Local Event",
+          type: "meeting",
+          starts_at: DateTime.utc_now(),
+          user_id: user.id
+        })
+
+        assert event.sync_status == "local_only"
+        assert event.external_id == nil
+
+        now = DateTime.utc_now()
+        {:ok, updated} = Events.update_sync_status(event, %{
+          external_id: "ext_123",
+          sync_status: "synced",
+          last_synced_at: now,
+          sync_metadata: %{"etag" => "abc123"}
+        })
+
+        assert updated.external_id == "ext_123"
+        assert updated.sync_status == "synced"
+        assert updated.last_synced_at == now
+        assert updated.sync_metadata == %{"etag" => "abc123"}
+    end
+  end
+
+  describe "mark_pending_push/1" do
+    test "marks synced event as pending_push" do
+        user = insert(:user)
+        account = insert(:external_account, user: user, service_name: "google")
+
+        {:ok, event} = Events.create_event(%{
+          title: "Synced Event",
+          type: "meeting",
+          starts_at: DateTime.utc_now(),
+          user_id: user.id,
+          external_id: "ext_123",
+          external_account_id: account.id,
+          sync_status: "synced"
+        })
+
+        {:ok, marked} = Events.mark_pending_push(event)
+        assert marked.sync_status == "pending_push"
+      end
+
+      test "returns unchanged event when no external_id" do
+        user = insert(:user)
+
+        {:ok, event} = Events.create_event(%{
+          title: "Local Event",
+          type: "meeting",
+          starts_at: DateTime.utc_now(),
+          user_id: user.id
+        })
+
+        {:ok, result} = Events.mark_pending_push(event)
+        assert result.id == event.id
+        assert result.sync_status == "local_only"
+    end
+  end
+
+  describe "sync_status validation" do
+    test "accepts valid sync statuses" do
+        user = insert(:user)
+
+        for status <- ~w(local_only synced pending_push pending_pull conflict) do
+          {:ok, event} = Events.create_event(%{
+            title: "Event with #{status}",
+            type: "meeting",
+            starts_at: DateTime.utc_now(),
+            user_id: user.id,
+            sync_status: status
+          })
+
+          assert event.sync_status == status
+        end
+      end
+
+      test "rejects invalid sync status" do
+        user = insert(:user)
+
+        {:error, changeset} = Events.create_event(%{
+          title: "Invalid Status Event",
+          type: "meeting",
+          starts_at: DateTime.utc_now(),
+          user_id: user.id,
+          sync_status: "invalid_status"
+        })
+
+        assert errors_on(changeset).sync_status
+    end
+  end
 end

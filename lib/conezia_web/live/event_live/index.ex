@@ -222,6 +222,15 @@ defmodule ConeziaWeb.EventLive.Index do
                   <p class="text-sm font-medium text-gray-900">{event.title}</p>
                   <.badge color={type_color(event.type)}>{humanize(event.type)}</.badge>
                   <span :if={event.is_recurring} class="text-xs text-indigo-500 font-medium">Recurring</span>
+                  <.badge :if={event.sync_status == "synced"} color={:green}>
+                    <span class="hero-arrow-path h-3 w-3 mr-0.5" />Synced
+                  </.badge>
+                  <.badge :if={event.sync_status == "pending_push"} color={:yellow}>
+                    <span class="hero-arrow-up-tray h-3 w-3 mr-0.5" />Pending
+                  </.badge>
+                  <.badge :if={event.sync_status == "conflict"} color={:red}>
+                    <span class="hero-exclamation-triangle h-3 w-3 mr-0.5" />Conflict
+                  </.badge>
                 </div>
                 <div class="mt-1 flex items-center gap-3 text-xs text-gray-500">
                   <span class="flex items-center gap-1">

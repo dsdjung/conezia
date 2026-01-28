@@ -47,10 +47,11 @@ defmodule Conezia.Integrations.Providers.Google do
   @impl true
   def scopes do
     # Combined scopes for all Google services
+    # Note: calendar scope (not .readonly) enables read/write for calendar sync
     [
       "https://www.googleapis.com/auth/contacts.readonly",
       "https://www.googleapis.com/auth/contacts.other.readonly",
-      "https://www.googleapis.com/auth/calendar.readonly",
+      "https://www.googleapis.com/auth/calendar",
       "https://www.googleapis.com/auth/gmail.readonly"
     ]
   end
@@ -179,6 +180,262 @@ defmodule Conezia.Integrations.Providers.Google do
       {:ok, %{status: _status}} -> :ok
       {:error, reason} -> {:error, "Failed to revoke: #{inspect(reason)}"}
     end
+  end
+
+  # ============================================================================
+  # Calendar Sync Functions (for two-way sync)
+  # ============================================================================
+
+  @doc """
+  Fetches calendar events from Google Calendar for syncing.
+  Returns a list of event maps with Google Calendar metadata.
+  """
+  def fetch_calendar_events(access_token, opts \\ []) do
+    time_min = Keyword.get(opts, :time_min) || DateTime.utc_now() |> DateTime.add(-365, :day) |> DateTime.to_iso8601()
+    time_max = Keyword.get(opts, :time_max) || DateTime.utc_now() |> DateTime.add(365, :day) |> DateTime.to_iso8601()
+    sync_token = Keyword.get(opts, :sync_token)
+
+    fetch_calendar_events_paginated(access_token, time_min, time_max, sync_token, nil, [])
+  end
+
+  defp fetch_calendar_events_paginated(access_token, time_min, time_max, sync_token, page_token, accumulated) do
+    params =
+      if sync_token do
+        %{syncToken: sync_token}
+      else
+        %{
+          timeMin: time_min,
+          timeMax: time_max,
+          singleEvents: true,
+          orderBy: "startTime",
+          maxResults: 250
+        }
+      end
+
+    params = if page_token, do: Map.put(params, :pageToken, page_token), else: params
+
+    url = "#{@google_calendar_api}/calendars/primary/events?#{URI.encode_query(params)}"
+    headers = [{"authorization", "Bearer #{access_token}"}]
+
+    case Req.get(url, headers: headers) do
+      {:ok, %{status: 200, body: body}} ->
+        events = parse_calendar_events_for_sync(body["items"] || [])
+        all_events = accumulated ++ events
+
+        case body["nextPageToken"] do
+          nil ->
+            {:ok, all_events, body["nextSyncToken"]}
+
+          next_token ->
+            fetch_calendar_events_paginated(access_token, time_min, time_max, sync_token, next_token, all_events)
+        end
+
+      {:ok, %{status: 401}} ->
+        {:error, "Token expired or invalid"}
+
+      {:ok, %{status: 410}} ->
+        # Sync token expired, need full sync
+        {:error, :sync_token_expired}
+
+      {:ok, %{status: status, body: body}} ->
+        error = get_in(body, ["error", "message"]) || "Unknown error"
+        {:error, "Failed to fetch calendar events (#{status}): #{error}"}
+
+      {:error, reason} ->
+        {:error, "Failed to connect to Google: #{inspect(reason)}"}
+    end
+  end
+
+  defp parse_calendar_events_for_sync(items) do
+    Enum.map(items, fn item ->
+      %{
+        external_id: item["id"],
+        title: item["summary"] || "Untitled Event",
+        description: item["description"],
+        location: item["location"],
+        starts_at: parse_google_datetime(item["start"]),
+        ends_at: parse_google_datetime(item["end"]),
+        all_day: item["start"]["date"] != nil,
+        etag: item["etag"],
+        status: item["status"],
+        attendees: Enum.map(item["attendees"] || [], fn a ->
+          %{email: a["email"], name: a["displayName"], response_status: a["responseStatus"]}
+        end),
+        recurrence: item["recurrence"],
+        html_link: item["htmlLink"]
+      }
+    end)
+  end
+
+  defp parse_google_datetime(nil), do: nil
+  defp parse_google_datetime(%{"dateTime" => dt}) do
+    case DateTime.from_iso8601(dt) do
+      {:ok, datetime, _} -> datetime
+      _ -> nil
+    end
+  end
+  defp parse_google_datetime(%{"date" => date}) do
+    case Date.from_iso8601(date) do
+      {:ok, d} -> DateTime.new!(d, ~T[00:00:00], "Etc/UTC")
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Creates a new event in Google Calendar.
+  Returns {:ok, created_event} with the event's Google Calendar ID and etag.
+  """
+  def create_calendar_event(access_token, event_data) do
+    url = "#{@google_calendar_api}/calendars/primary/events"
+    headers = [
+      {"authorization", "Bearer #{access_token}"},
+      {"content-type", "application/json"}
+    ]
+
+    body = build_google_event_body(event_data)
+
+    case Req.post(url, headers: headers, json: body) do
+      {:ok, %{status: 200, body: response}} ->
+        {:ok, %{
+          external_id: response["id"],
+          etag: response["etag"],
+          html_link: response["htmlLink"]
+        }}
+
+      {:ok, %{status: 401}} ->
+        {:error, "Token expired or invalid"}
+
+      {:ok, %{status: status, body: body}} ->
+        error = get_in(body, ["error", "message"]) || "Unknown error"
+        {:error, "Failed to create event (#{status}): #{error}"}
+
+      {:error, reason} ->
+        {:error, "Failed to connect to Google: #{inspect(reason)}"}
+    end
+  end
+
+  @doc """
+  Updates an existing event in Google Calendar.
+  """
+  def update_calendar_event(access_token, event_id, event_data) do
+    url = "#{@google_calendar_api}/calendars/primary/events/#{event_id}"
+    headers = [
+      {"authorization", "Bearer #{access_token}"},
+      {"content-type", "application/json"}
+    ]
+
+    body = build_google_event_body(event_data)
+
+    case Req.put(url, headers: headers, json: body) do
+      {:ok, %{status: 200, body: response}} ->
+        {:ok, %{
+          external_id: response["id"],
+          etag: response["etag"],
+          html_link: response["htmlLink"]
+        }}
+
+      {:ok, %{status: 401}} ->
+        {:error, "Token expired or invalid"}
+
+      {:ok, %{status: 404}} ->
+        {:error, "Event not found"}
+
+      {:ok, %{status: status, body: body}} ->
+        error = get_in(body, ["error", "message"]) || "Unknown error"
+        {:error, "Failed to update event (#{status}): #{error}"}
+
+      {:error, reason} ->
+        {:error, "Failed to connect to Google: #{inspect(reason)}"}
+    end
+  end
+
+  @doc """
+  Deletes an event from Google Calendar.
+  """
+  def delete_calendar_event(access_token, event_id) do
+    url = "#{@google_calendar_api}/calendars/primary/events/#{event_id}"
+    headers = [{"authorization", "Bearer #{access_token}"}]
+
+    case Req.delete(url, headers: headers) do
+      {:ok, %{status: status}} when status in [200, 204] ->
+        :ok
+
+      {:ok, %{status: 401}} ->
+        {:error, "Token expired or invalid"}
+
+      {:ok, %{status: 404}} ->
+        # Already deleted, consider success
+        :ok
+
+      {:ok, %{status: 410}} ->
+        # Already deleted (gone)
+        :ok
+
+      {:ok, %{status: status, body: body}} ->
+        error = get_in(body, ["error", "message"]) || "Unknown error"
+        {:error, "Failed to delete event (#{status}): #{error}"}
+
+      {:error, reason} ->
+        {:error, "Failed to connect to Google: #{inspect(reason)}"}
+    end
+  end
+
+  defp build_google_event_body(event_data) do
+    body = %{
+      "summary" => event_data[:title] || event_data["title"]
+    }
+
+    body = if desc = event_data[:description] || event_data["description"] do
+      Map.put(body, "description", desc)
+    else
+      body
+    end
+
+    body = if loc = event_data[:location] || event_data["location"] do
+      Map.put(body, "location", loc)
+    else
+      body
+    end
+
+    # Handle start/end times
+    starts_at = event_data[:starts_at] || event_data["starts_at"]
+    ends_at = event_data[:ends_at] || event_data["ends_at"]
+    all_day = event_data[:all_day] || event_data["all_day"] || false
+
+    body = if starts_at do
+      start_value = if all_day do
+        %{"date" => Date.to_iso8601(DateTime.to_date(starts_at))}
+      else
+        %{"dateTime" => DateTime.to_iso8601(starts_at), "timeZone" => "UTC"}
+      end
+      Map.put(body, "start", start_value)
+    else
+      body
+    end
+
+    body = if ends_at do
+      end_value = if all_day do
+        %{"date" => Date.to_iso8601(DateTime.to_date(ends_at))}
+      else
+        %{"dateTime" => DateTime.to_iso8601(ends_at), "timeZone" => "UTC"}
+      end
+      Map.put(body, "end", end_value)
+    else
+      # If no end time, set to same as start (or +1 day for all-day)
+      if starts_at do
+        end_value = if all_day do
+          end_date = starts_at |> DateTime.to_date() |> Date.add(1)
+          %{"date" => Date.to_iso8601(end_date)}
+        else
+          %{"dateTime" => DateTime.to_iso8601(starts_at), "timeZone" => "UTC"}
+        end
+        Map.put(body, "end", end_value)
+      else
+        body
+      end
+    end
+
+    body
   end
 
   # ============================================================================

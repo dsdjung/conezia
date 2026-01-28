@@ -62,6 +62,7 @@ defmodule Conezia.Integrations.ServiceProvider do
   def get_provider("google"), do: {:ok, Conezia.Integrations.Providers.Google}
   def get_provider("linkedin"), do: {:ok, Conezia.Integrations.Providers.LinkedIn}
   def get_provider("icloud"), do: {:ok, Conezia.Integrations.Providers.ICloudContacts}
+  def get_provider("icloud_calendar"), do: {:ok, Conezia.Integrations.Providers.ICloudCalendar}
   def get_provider("facebook"), do: {:ok, Conezia.Integrations.Providers.Facebook}
   def get_provider(service), do: {:error, "Unknown service: #{service}"}
 
@@ -92,6 +93,14 @@ defmodule Conezia.Integrations.ServiceProvider do
         display_name: "iCloud Contacts",
         description: "Import contacts from iCloud",
         icon: "hero-cloud",
+        status: :available
+      },
+      %{
+        service: "icloud_calendar",
+        module: Conezia.Integrations.Providers.ICloudCalendar,
+        display_name: "iCloud Calendar",
+        description: "Sync events with iCloud Calendar",
+        icon: "hero-calendar",
         status: :available
       },
       %{

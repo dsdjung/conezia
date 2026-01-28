@@ -84,9 +84,22 @@ defmodule Conezia.Events do
   def update_event(%Event{} = event, attrs) do
     event
     |> Event.changeset(attrs)
+    |> maybe_mark_pending_push(event)
     |> Repo.update()
     |> maybe_link_entities(attrs)
   end
+
+  defp maybe_mark_pending_push(changeset, %Event{external_id: nil}), do: changeset
+
+  defp maybe_mark_pending_push(changeset, %Event{sync_status: status}) when status in ["synced", "pending_pull"] do
+    if changeset.changes != %{} do
+      Ecto.Changeset.put_change(changeset, :sync_status, "pending_push")
+    else
+      changeset
+    end
+  end
+
+  defp maybe_mark_pending_push(changeset, _event), do: changeset
 
   def delete_event(%Event{} = event) do
     if event.reminder_id do
@@ -129,6 +142,76 @@ defmodule Conezia.Events do
       preload: [:entities]
     )
     |> Repo.all()
+  end
+
+  # Calendar sync functions
+
+  @doc """
+  Finds an event by external_id for a user.
+  """
+  def find_by_external_id(user_id, external_id) do
+    Event
+    |> where([e], e.user_id == ^user_id and e.external_id == ^external_id)
+    |> preload([:entities, :external_account])
+    |> Repo.one()
+  end
+
+  @doc """
+  Finds a matching event by title and date range (fuzzy deduplication).
+  Uses a tolerance of +/- 1 hour for start time matching.
+  """
+  def find_matching_event(user_id, %{title: title, starts_at: starts_at}) do
+    normalized_title = String.downcase(String.trim(title))
+    start_min = DateTime.add(starts_at, -3600, :second)
+    start_max = DateTime.add(starts_at, 3600, :second)
+
+    Event
+    |> where([e], e.user_id == ^user_id)
+    |> where([e], e.starts_at >= ^start_min and e.starts_at <= ^start_max)
+    |> where([e], fragment("lower(trim(?)) = ?", e.title, ^normalized_title))
+    |> limit(1)
+    |> preload([:entities, :external_account])
+    |> Repo.one()
+  end
+
+  @doc """
+  Lists events pending sync (local_only or pending_push) for export.
+  Can filter by external_account_id for events already linked to a specific account.
+  """
+  def list_events_pending_sync(user_id, external_account_id \\ nil) do
+    query =
+      Event
+      |> where([e], e.user_id == ^user_id)
+      |> where([e], e.sync_status in ["local_only", "pending_push"])
+      |> preload(:entities)
+
+    query =
+      if external_account_id do
+        where(query, [e], e.external_account_id == ^external_account_id or is_nil(e.external_account_id))
+      else
+        query
+      end
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Updates an event's sync status and metadata after sync.
+  """
+  def update_sync_status(%Event{} = event, attrs) do
+    event
+    |> Ecto.Changeset.change(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Marks an event as pending push when it has local changes.
+  Only affects events that are already synced.
+  """
+  def mark_pending_push(%Event{external_id: nil} = event), do: {:ok, event}
+
+  def mark_pending_push(%Event{} = event) do
+    update_sync_status(event, %{sync_status: "pending_push"})
   end
 
   # Private helpers

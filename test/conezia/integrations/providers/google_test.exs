@@ -20,7 +20,8 @@ defmodule Conezia.Integrations.Providers.GoogleTest do
       scopes = Google.scopes()
       assert is_list(scopes)
       assert "https://www.googleapis.com/auth/contacts.readonly" in scopes
-      assert "https://www.googleapis.com/auth/calendar.readonly" in scopes
+      # Full calendar scope for two-way sync (read and write)
+      assert "https://www.googleapis.com/auth/calendar" in scopes
       assert "https://www.googleapis.com/auth/gmail.readonly" in scopes
     end
   end
@@ -57,7 +58,8 @@ defmodule Conezia.Integrations.Providers.GoogleTest do
       assert String.contains?(url, "prompt=consent")
       # Check that all scopes are included
       assert String.contains?(url, "contacts.readonly")
-      assert String.contains?(url, "calendar.readonly")
+      # Full calendar scope for two-way sync
+      assert String.contains?(url, "auth%2Fcalendar")
       assert String.contains?(url, "gmail.readonly")
     end
   end

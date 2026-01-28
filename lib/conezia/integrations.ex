@@ -161,6 +161,14 @@ defmodule Conezia.Integrations do
   end
 
   @doc """
+  Gets the decrypted refresh token for an account.
+  For iCloud services, this contains the Apple ID.
+  """
+  def get_refresh_token(%ExternalAccount{} = account) do
+    Vault.decrypt(account.refresh_token)
+  end
+
+  @doc """
   Triggers a sync for an external account.
   Returns {:ok, import_job} or {:error, reason}.
   """

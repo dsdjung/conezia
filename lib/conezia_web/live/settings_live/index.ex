@@ -8,6 +8,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
   alias Conezia.ExternalAccounts
   alias Conezia.Workers.SyncWorker
   alias Conezia.Workers.GmailSyncWorker
+  alias Conezia.Workers.CalendarSyncWorker
 
   @tabs ~w(integrations account)
 
@@ -19,6 +20,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Conezia.PubSub, SyncWorker.topic(user.id))
       Phoenix.PubSub.subscribe(Conezia.PubSub, GmailSyncWorker.topic(user.id))
+      Phoenix.PubSub.subscribe(Conezia.PubSub, CalendarSyncWorker.topic(user.id))
     end
 
     socket =
@@ -27,6 +29,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
       |> assign(:current_tab, "integrations")
       |> assign(:syncing, false)
       |> assign(:syncing_messages, false)
+      |> assign(:syncing_calendar, false)
       |> assign_services(user)
       |> assign_import_jobs(user)
 
@@ -124,6 +127,39 @@ defmodule ConeziaWeb.SettingsLive.Index do
     end
   end
 
+  def handle_event("sync_calendar", %{"id" => account_id}, socket) do
+    user = socket.assigns.current_user
+
+    case ExternalAccounts.get_external_account_for_user(account_id, user.id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Account not found")}
+
+      account ->
+        if account.service_name in ["google", "icloud_calendar"] do
+          job_args = %{
+            "external_account_id" => account.id,
+            "user_id" => user.id,
+            "direction" => "both"
+          }
+
+          case Oban.insert(CalendarSyncWorker.new(job_args)) do
+            {:ok, _job} ->
+              socket =
+                socket
+                |> assign(:syncing_calendar, true)
+                |> put_flash(:info, "Starting calendar sync...")
+
+              {:noreply, socket}
+
+            {:error, reason} ->
+              {:noreply, put_flash(socket, :error, "Failed to start sync: #{inspect(reason)}")}
+          end
+        else
+          {:noreply, put_flash(socket, :error, "Calendar sync is only available for Google and iCloud Calendar accounts")}
+        end
+    end
+  end
+
   # Handle PubSub messages for sync status updates
   @impl true
   def handle_info({:sync_status, :started, _payload}, socket) do
@@ -189,6 +225,41 @@ defmodule ConeziaWeb.SettingsLive.Index do
     {:noreply, socket}
   end
 
+  # Calendar sync status handlers
+  def handle_info({:calendar_sync_status, :started, _payload}, socket) do
+    {:noreply, assign(socket, :syncing_calendar, true)}
+  end
+
+  def handle_info({:calendar_sync_status, :completed, payload}, socket) do
+    user = socket.assigns.current_user
+    stats = payload[:stats] || %{}
+
+    created = stats[:created] || 0
+    updated = stats[:updated] || 0
+    exported = stats[:exported] || 0
+
+    socket =
+      socket
+      |> assign(:syncing_calendar, false)
+      |> put_flash(:info, "Calendar sync completed: #{created} imported, #{updated} updated, #{exported} exported")
+      |> assign_services(user)
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:calendar_sync_status, :failed, payload}, socket) do
+    user = socket.assigns.current_user
+    error = payload[:error] || "Unknown error"
+
+    socket =
+      socket
+      |> assign(:syncing_calendar, false)
+      |> put_flash(:error, "Calendar sync failed: #{error}")
+      |> assign_services(user)
+
+    {:noreply, socket}
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -228,7 +299,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
 
       <!-- Tab Content -->
       <div :if={@current_tab == "integrations"}>
-        <.integrations_content services={@services} import_jobs={@import_jobs} syncing={@syncing} syncing_messages={@syncing_messages} />
+        <.integrations_content services={@services} import_jobs={@import_jobs} syncing={@syncing} syncing_messages={@syncing_messages} syncing_calendar={@syncing_calendar} />
       </div>
 
       <div :if={@current_tab == "account"}>
@@ -243,6 +314,7 @@ defmodule ConeziaWeb.SettingsLive.Index do
   attr :import_jobs, :list, required: true
   attr :syncing, :boolean, default: false
   attr :syncing_messages, :boolean, default: false
+  attr :syncing_calendar, :boolean, default: false
 
   defp integrations_content(assigns) do
     ~H"""
@@ -322,6 +394,24 @@ defmodule ConeziaWeb.SettingsLive.Index do
                       @syncing_messages && "animate-pulse"
                     ]} />
                     <%= if @syncing_messages, do: "Syncing...", else: "Sync Messages" %>
+                  </button>
+                  <!-- Calendar Sync - For Google and iCloud Calendar -->
+                  <button
+                    :if={service.service in ["google", "icloud_calendar"]}
+                    phx-click="sync_calendar"
+                    phx-value-id={service.account.id}
+                    disabled={@syncing_calendar}
+                    class={[
+                      "inline-flex items-center rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset ring-gray-300",
+                      @syncing_calendar && "bg-gray-100 text-gray-400 cursor-not-allowed",
+                      !@syncing_calendar && "bg-white text-gray-900 hover:bg-gray-50"
+                    ]}
+                  >
+                    <span class={[
+                      "hero-calendar -ml-0.5 mr-1.5 h-4 w-4",
+                      @syncing_calendar && "animate-spin"
+                    ]} />
+                    <%= if @syncing_calendar, do: "Syncing...", else: "Sync Calendar" %>
                   </button>
                   <button
                     phx-click="disconnect"
