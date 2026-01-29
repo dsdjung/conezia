@@ -246,6 +246,127 @@ defmodule Conezia.Workers.CalendarSyncWorkerTest do
     end
   end
 
+  describe "orphaned event deletion" do
+    test "deletes synced events not returned from external calendar" do
+      user = insert(:user)
+      account = insert(:external_account, user: user, service_name: "google")
+
+      # Create synced events from previous sync
+      {:ok, event1} = Events.create_event(%{
+        title: "Event Still on Calendar",
+        type: "meeting",
+        starts_at: ~U[2026-02-01 10:00:00Z],
+        user_id: user.id,
+        external_id: "ext_event_1",
+        external_account_id: account.id,
+        sync_status: "synced"
+      })
+
+      {:ok, event2} = Events.create_event(%{
+        title: "Event Deleted from Calendar",
+        type: "meeting",
+        starts_at: ~U[2026-02-01 11:00:00Z],
+        user_id: user.id,
+        external_id: "ext_event_2",
+        external_account_id: account.id,
+        sync_status: "synced"
+      })
+
+      {:ok, event3} = Events.create_event(%{
+        title: "Another Deleted Event",
+        type: "meeting",
+        starts_at: ~U[2026-02-01 12:00:00Z],
+        user_id: user.id,
+        external_id: "ext_event_3",
+        external_account_id: account.id,
+        sync_status: "synced"
+      })
+
+      # Simulate sync - only ext_event_1 is returned
+      external_events = [
+        %{
+          title: "Event Still on Calendar",
+          starts_at: ~U[2026-02-01 10:00:00Z],
+          external_id: "ext_event_1",
+          etag: "etag1",
+          all_day: false
+        }
+      ]
+
+      stats = import_external_events(external_events, user.id, account)
+
+      # Should have deleted 2 orphaned events
+      assert stats.deleted == 2
+
+      # Event 1 should still exist
+      assert Events.get_event_for_user(event1.id, user.id) != nil
+
+      # Events 2 and 3 should be deleted
+      assert Events.get_event_for_user(event2.id, user.id) == nil
+      assert Events.get_event_for_user(event3.id, user.id) == nil
+    end
+
+    test "does not delete events from other accounts" do
+      user = insert(:user)
+      account1 = insert(:external_account, user: user, service_name: "google")
+      account2 = insert(:external_account, user: user, service_name: "icloud_calendar")
+
+      # Create event synced with account1
+      {:ok, google_event} = Events.create_event(%{
+        title: "Google Event",
+        type: "meeting",
+        starts_at: ~U[2026-02-01 10:00:00Z],
+        user_id: user.id,
+        external_id: "google_ext_1",
+        external_account_id: account1.id,
+        sync_status: "synced"
+      })
+
+      # Create event synced with account2
+      {:ok, icloud_event} = Events.create_event(%{
+        title: "iCloud Event",
+        type: "meeting",
+        starts_at: ~U[2026-02-01 11:00:00Z],
+        user_id: user.id,
+        external_id: "icloud_ext_1",
+        external_account_id: account2.id,
+        sync_status: "synced"
+      })
+
+      # Sync from account1 with no events returned
+      external_events = []
+      stats = import_external_events(external_events, user.id, account1)
+
+      # Google event should be deleted (orphaned from account1)
+      assert stats.deleted == 1
+      assert Events.get_event_for_user(google_event.id, user.id) == nil
+
+      # iCloud event should NOT be deleted (belongs to different account)
+      assert Events.get_event_for_user(icloud_event.id, user.id) != nil
+    end
+
+    test "does not delete local_only events" do
+      user = insert(:user)
+      account = insert(:external_account, user: user, service_name: "google")
+
+      # Create a local-only event (not synced yet)
+      {:ok, local_event} = Events.create_event(%{
+        title: "Local Event",
+        type: "meeting",
+        starts_at: ~U[2026-02-01 10:00:00Z],
+        user_id: user.id,
+        sync_status: "local_only"
+      })
+
+      # Sync with empty external events
+      stats = import_external_events([], user.id, account)
+
+      # Local event should NOT be deleted
+      assert stats.deleted == 0
+      assert Events.get_event_for_user(local_event.id, user.id) != nil
+    end
+  end
+
   describe "pending push detection" do
     test "auto-marks synced event as pending_push when updated locally" do
       user = insert(:user)
@@ -390,6 +511,54 @@ defmodule Conezia.Workers.CalendarSyncWorkerTest do
   end
 
   # Helper functions that replicate CalendarSyncWorker logic for testing
+
+  defp import_external_events(external_events, user_id, account) do
+    # Track which external_ids we see from the external calendar
+    seen_external_ids = MapSet.new()
+
+    {stats, seen_external_ids} =
+      Enum.reduce(external_events, {%{created: 0, updated: 0, skipped: 0, deleted: 0}, seen_external_ids}, fn ext_event, {acc, seen} ->
+        external_id = ext_event[:external_id] || ext_event["external_id"]
+        status = ext_event[:status] || ext_event["status"]
+
+        # Track non-cancelled events
+        seen =
+          if status != "cancelled" && external_id do
+            MapSet.put(seen, external_id)
+          else
+            seen
+          end
+
+        case import_single_event(ext_event, user_id, account) do
+          {:ok, :created} -> {%{acc | created: acc.created + 1}, seen}
+          {:ok, :updated} -> {%{acc | updated: acc.updated + 1}, seen}
+          {:ok, :skipped} -> {%{acc | skipped: acc.skipped + 1}, seen}
+          {:ok, :deleted} -> {%{acc | deleted: acc.deleted + 1}, seen}
+          {:error, _} -> {acc, seen}
+        end
+      end)
+
+    # Delete orphaned events
+    deleted_count = delete_orphaned_events(user_id, account.id, seen_external_ids)
+
+    %{stats | deleted: stats.deleted + deleted_count}
+  end
+
+  defp delete_orphaned_events(user_id, account_id, seen_external_ids) do
+    local_synced_events = Events.list_synced_events_for_account(user_id, account_id)
+
+    orphaned_events =
+      Enum.filter(local_synced_events, fn event ->
+        event.external_id && !MapSet.member?(seen_external_ids, event.external_id)
+      end)
+
+    Enum.reduce(orphaned_events, 0, fn event, count ->
+      case Events.delete_event(event) do
+        {:ok, _} -> count + 1
+        {:error, _} -> count
+      end
+    end)
+  end
 
   defp import_single_event(ext_event, user_id, account) do
     external_id = ext_event[:external_id] || ext_event["external_id"]

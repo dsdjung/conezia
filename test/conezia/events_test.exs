@@ -802,4 +802,105 @@ defmodule Conezia.EventsTest do
         assert errors_on(changeset).sync_status
     end
   end
+
+  describe "list_synced_events_for_account/2" do
+    test "returns synced events for a specific external account" do
+      user = insert(:user)
+      account = insert(:external_account, user: user, service_name: "google")
+
+      {:ok, event1} = Events.create_event(%{
+        title: "Google Event 1",
+        type: "meeting",
+        starts_at: DateTime.utc_now(),
+        user_id: user.id,
+        external_id: "ext_1",
+        external_account_id: account.id,
+        sync_status: "synced"
+      })
+
+      {:ok, event2} = Events.create_event(%{
+        title: "Google Event 2",
+        type: "meeting",
+        starts_at: DateTime.utc_now(),
+        user_id: user.id,
+        external_id: "ext_2",
+        external_account_id: account.id,
+        sync_status: "synced"
+      })
+
+      events = Events.list_synced_events_for_account(user.id, account.id)
+      event_ids = Enum.map(events, & &1.id)
+
+      assert length(events) == 2
+      assert event1.id in event_ids
+      assert event2.id in event_ids
+    end
+
+    test "does not return events without external_id" do
+      user = insert(:user)
+      account = insert(:external_account, user: user, service_name: "google")
+
+      {:ok, _local_event} = Events.create_event(%{
+        title: "Local Event",
+        type: "meeting",
+        starts_at: DateTime.utc_now(),
+        user_id: user.id,
+        external_account_id: account.id,
+        sync_status: "local_only"
+      })
+
+      events = Events.list_synced_events_for_account(user.id, account.id)
+      assert events == []
+    end
+
+    test "does not return events from other accounts" do
+      user = insert(:user)
+      account1 = insert(:external_account, user: user, service_name: "google")
+      account2 = insert(:external_account, user: user, service_name: "icloud_calendar")
+
+      {:ok, google_event} = Events.create_event(%{
+        title: "Google Event",
+        type: "meeting",
+        starts_at: DateTime.utc_now(),
+        user_id: user.id,
+        external_id: "google_ext_1",
+        external_account_id: account1.id,
+        sync_status: "synced"
+      })
+
+      {:ok, _icloud_event} = Events.create_event(%{
+        title: "iCloud Event",
+        type: "meeting",
+        starts_at: DateTime.utc_now(),
+        user_id: user.id,
+        external_id: "icloud_ext_1",
+        external_account_id: account2.id,
+        sync_status: "synced"
+      })
+
+      events = Events.list_synced_events_for_account(user.id, account1.id)
+      assert length(events) == 1
+      assert hd(events).id == google_event.id
+    end
+
+    test "does not return events from other users" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      account1 = insert(:external_account, user: user1, service_name: "google")
+      account2 = insert(:external_account, user: user2, service_name: "google")
+
+      {:ok, _user1_event} = Events.create_event(%{
+        title: "User1 Event",
+        type: "meeting",
+        starts_at: DateTime.utc_now(),
+        user_id: user1.id,
+        external_id: "ext_1",
+        external_account_id: account1.id,
+        sync_status: "synced"
+      })
+
+      events = Events.list_synced_events_for_account(user2.id, account2.id)
+      assert events == []
+    end
+  end
 end

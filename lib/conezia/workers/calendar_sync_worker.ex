@@ -117,13 +117,57 @@ defmodule Conezia.Workers.CalendarSyncWorker do
   end
 
   defp import_external_events(external_events, user_id, account) do
-    Enum.reduce(external_events, %{created: 0, updated: 0, skipped: 0, deleted: 0}, fn ext_event, acc ->
-      case import_single_event(ext_event, user_id, account) do
-        {:ok, :created} -> %{acc | created: acc.created + 1}
-        {:ok, :updated} -> %{acc | updated: acc.updated + 1}
-        {:ok, :skipped} -> %{acc | skipped: acc.skipped + 1}
-        {:ok, :deleted} -> %{acc | deleted: acc.deleted + 1}
-        {:error, _} -> acc
+    # Track which external_ids we see from the external calendar
+    seen_external_ids = MapSet.new()
+
+    {stats, seen_external_ids} =
+      Enum.reduce(external_events, {%{created: 0, updated: 0, skipped: 0, deleted: 0}, seen_external_ids}, fn ext_event, {acc, seen} ->
+        external_id = ext_event[:external_id] || ext_event["external_id"]
+        status = ext_event[:status] || ext_event["status"]
+
+        # Track non-cancelled events
+        seen =
+          if status != "cancelled" && external_id do
+            MapSet.put(seen, external_id)
+          else
+            seen
+          end
+
+        case import_single_event(ext_event, user_id, account) do
+          {:ok, :created} -> {%{acc | created: acc.created + 1}, seen}
+          {:ok, :updated} -> {%{acc | updated: acc.updated + 1}, seen}
+          {:ok, :skipped} -> {%{acc | skipped: acc.skipped + 1}, seen}
+          {:ok, :deleted} -> {%{acc | deleted: acc.deleted + 1}, seen}
+          {:error, _} -> {acc, seen}
+        end
+      end)
+
+    # Delete orphaned events (synced locally but not returned from external calendar)
+    deleted_count = delete_orphaned_events(user_id, account.id, seen_external_ids)
+
+    %{stats | deleted: stats.deleted + deleted_count}
+  end
+
+  defp delete_orphaned_events(user_id, account_id, seen_external_ids) do
+    # Get all synced events for this account
+    local_synced_events = Events.list_synced_events_for_account(user_id, account_id)
+
+    # Find events that exist locally but weren't returned from external calendar
+    orphaned_events =
+      Enum.filter(local_synced_events, fn event ->
+        event.external_id && !MapSet.member?(seen_external_ids, event.external_id)
+      end)
+
+    # Delete orphaned events
+    Enum.reduce(orphaned_events, 0, fn event, count ->
+      case Events.delete_event(event) do
+        {:ok, _} ->
+          Logger.info("Deleted orphaned event: #{event.title} (external_id: #{event.external_id})")
+          count + 1
+
+        {:error, reason} ->
+          Logger.warning("Failed to delete orphaned event #{event.id}: #{inspect(reason)}")
+          count
       end
     end)
   end

@@ -264,6 +264,18 @@ defmodule Conezia.Events do
     update_sync_status(event, %{sync_status: "pending_push"})
   end
 
+  @doc """
+  Lists all synced events for a user from a specific external account.
+  Used to find orphaned events during sync (events deleted from external calendar).
+  """
+  def list_synced_events_for_account(user_id, external_account_id) do
+    Event
+    |> where([e], e.user_id == ^user_id)
+    |> where([e], e.external_account_id == ^external_account_id)
+    |> where([e], not is_nil(e.external_id))
+    |> Repo.all()
+  end
+
   # Private helpers
 
   defp filter_by_type(query, nil), do: query
