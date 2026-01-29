@@ -117,11 +117,12 @@ defmodule Conezia.Workers.CalendarSyncWorker do
   end
 
   defp import_external_events(external_events, user_id, account) do
-    Enum.reduce(external_events, %{created: 0, updated: 0, skipped: 0}, fn ext_event, acc ->
+    Enum.reduce(external_events, %{created: 0, updated: 0, skipped: 0, deleted: 0}, fn ext_event, acc ->
       case import_single_event(ext_event, user_id, account) do
         {:ok, :created} -> %{acc | created: acc.created + 1}
         {:ok, :updated} -> %{acc | updated: acc.updated + 1}
         {:ok, :skipped} -> %{acc | skipped: acc.skipped + 1}
+        {:ok, :deleted} -> %{acc | deleted: acc.deleted + 1}
         {:error, _} -> acc
       end
     end)
@@ -129,24 +130,45 @@ defmodule Conezia.Workers.CalendarSyncWorker do
 
   defp import_single_event(ext_event, user_id, account) do
     external_id = ext_event[:external_id] || ext_event["external_id"]
+    status = ext_event[:status] || ext_event["status"]
 
-    # Check for existing by external_id first
+    # Handle cancelled/deleted events from Google Calendar
+    if status == "cancelled" do
+      handle_cancelled_event(user_id, external_id)
+    else
+      # Check for existing by external_id first
+      case Events.find_by_external_id(user_id, external_id) do
+        nil ->
+          # Try fuzzy match by title + date
+          title = ext_event[:title] || ext_event["title"]
+          starts_at = ext_event[:starts_at] || ext_event["starts_at"]
+
+          case Events.find_matching_event(user_id, %{title: title, starts_at: starts_at}) do
+            nil ->
+              create_event_from_external(ext_event, user_id, account)
+
+            existing ->
+              merge_event_from_external(existing, ext_event, account)
+          end
+
+        existing ->
+          merge_event_from_external(existing, ext_event, account)
+      end
+    end
+  end
+
+  defp handle_cancelled_event(user_id, external_id) do
     case Events.find_by_external_id(user_id, external_id) do
       nil ->
-        # Try fuzzy match by title + date
-        title = ext_event[:title] || ext_event["title"]
-        starts_at = ext_event[:starts_at] || ext_event["starts_at"]
+        # Event doesn't exist locally, nothing to delete
+        {:ok, :skipped}
 
-        case Events.find_matching_event(user_id, %{title: title, starts_at: starts_at}) do
-          nil ->
-            create_event_from_external(ext_event, user_id, account)
-
-          existing ->
-            merge_event_from_external(existing, ext_event, account)
+      event ->
+        # Delete the local event
+        case Events.delete_event(event) do
+          {:ok, _} -> {:ok, :deleted}
+          {:error, _} -> {:error, :delete_failed}
         end
-
-      existing ->
-        merge_event_from_external(existing, ext_event, account)
     end
   end
 

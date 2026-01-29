@@ -203,6 +203,7 @@ defmodule Conezia.Integrations.Providers.Google do
   defp fetch_calendar_events_paginated(access_token, time_min, time_max, sync_token, page_token, accumulated) do
     params =
       if sync_token do
+        # Incremental sync - showDeleted is implied
         %{syncToken: sync_token}
       else
         %{
@@ -210,7 +211,9 @@ defmodule Conezia.Integrations.Providers.Google do
           timeMax: time_max,
           singleEvents: true,
           orderBy: "startTime",
-          maxResults: 250
+          maxResults: 250,
+          # Include deleted events so we can remove them locally
+          showDeleted: true
         }
       end
 
@@ -250,6 +253,7 @@ defmodule Conezia.Integrations.Providers.Google do
 
   defp parse_calendar_events_for_sync(items) do
     Enum.map(items, fn item ->
+      # Cancelled events may not have start/end times
       %{
         external_id: item["id"],
         title: item["summary"] || "Untitled Event",
@@ -257,7 +261,7 @@ defmodule Conezia.Integrations.Providers.Google do
         location: item["location"],
         starts_at: parse_google_datetime(item["start"]),
         ends_at: parse_google_datetime(item["end"]),
-        all_day: item["start"]["date"] != nil,
+        all_day: item["start"] && item["start"]["date"] != nil,
         etag: item["etag"],
         status: item["status"],
         attendees: Enum.map(item["attendees"] || [], fn a ->

@@ -200,6 +200,50 @@ defmodule Conezia.Workers.CalendarSyncWorkerTest do
       merged = Events.get_event_for_user(existing.id, user.id)
       assert merged.external_id == "google_event_abc"
     end
+
+    test "deletes local event when external event is cancelled" do
+      user = insert(:user)
+      account = insert(:external_account, user: user, service_name: "google")
+
+      # Create existing synced event
+      {:ok, existing} = Events.create_event(%{
+        title: "Meeting to be deleted",
+        type: "meeting",
+        starts_at: ~U[2026-02-01 10:00:00Z],
+        user_id: user.id,
+        external_id: "google_event_to_delete",
+        external_account_id: account.id,
+        sync_status: "synced"
+      })
+
+      # Import cancelled event from Google
+      ext_event = %{
+        external_id: "google_event_to_delete",
+        status: "cancelled"
+      }
+
+      result = import_single_event(ext_event, user.id, account)
+
+      assert {:ok, :deleted} = result
+
+      # Event should be deleted
+      assert Events.get_event_for_user(existing.id, user.id) == nil
+    end
+
+    test "skips deletion for cancelled event that doesn't exist locally" do
+      user = insert(:user)
+      account = insert(:external_account, user: user, service_name: "google")
+
+      # Import cancelled event that doesn't exist locally
+      ext_event = %{
+        external_id: "nonexistent_event",
+        status: "cancelled"
+      }
+
+      result = import_single_event(ext_event, user.id, account)
+
+      assert {:ok, :skipped} = result
+    end
   end
 
   describe "pending push detection" do
@@ -349,22 +393,43 @@ defmodule Conezia.Workers.CalendarSyncWorkerTest do
 
   defp import_single_event(ext_event, user_id, account) do
     external_id = ext_event[:external_id] || ext_event["external_id"]
+    status = ext_event[:status] || ext_event["status"]
 
+    # Handle cancelled/deleted events from Google Calendar
+    if status == "cancelled" do
+      handle_cancelled_event(user_id, external_id)
+    else
+      case Events.find_by_external_id(user_id, external_id) do
+        nil ->
+          title = ext_event[:title] || ext_event["title"]
+          starts_at = ext_event[:starts_at] || ext_event["starts_at"]
+
+          case Events.find_matching_event(user_id, %{title: title, starts_at: starts_at}) do
+            nil ->
+              create_event_from_external(ext_event, user_id, account)
+
+            existing ->
+              merge_event_from_external(existing, ext_event, account)
+          end
+
+        existing ->
+          merge_event_from_external(existing, ext_event, account)
+      end
+    end
+  end
+
+  defp handle_cancelled_event(user_id, external_id) do
     case Events.find_by_external_id(user_id, external_id) do
       nil ->
-        title = ext_event[:title] || ext_event["title"]
-        starts_at = ext_event[:starts_at] || ext_event["starts_at"]
+        # Event doesn't exist locally, nothing to delete
+        {:ok, :skipped}
 
-        case Events.find_matching_event(user_id, %{title: title, starts_at: starts_at}) do
-          nil ->
-            create_event_from_external(ext_event, user_id, account)
-
-          existing ->
-            merge_event_from_external(existing, ext_event, account)
+      event ->
+        # Delete the local event
+        case Events.delete_event(event) do
+          {:ok, _} -> {:ok, :deleted}
+          {:error, _} -> {:error, :delete_failed}
         end
-
-      existing ->
-        merge_event_from_external(existing, ext_event, account)
     end
   end
 
