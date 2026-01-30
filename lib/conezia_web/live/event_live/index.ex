@@ -21,6 +21,9 @@ defmodule ConeziaWeb.EventLive.Index do
     # Calendar view state
     today = Date.utc_today()
 
+    # Load calendar events for default calendar view
+    calendar_events = Events.list_events_for_month(user.id, today.year, today.month)
+
     socket =
       socket
       |> assign(:page_title, "Events")
@@ -29,10 +32,10 @@ defmodule ConeziaWeb.EventLive.Index do
       |> assign(:sort, "date_asc")
       |> assign(:involvement, "all")
       |> assign(:time_filter, "upcoming")
-      |> assign(:view_mode, "list")
+      |> assign(:view_mode, "calendar")
       |> assign(:calendar_year, today.year)
       |> assign(:calendar_month, today.month)
-      |> assign(:calendar_events, %{})
+      |> assign(:calendar_events, calendar_events)
       |> assign(:self_entity_id, self_entity && self_entity.id)
       |> assign(:page, 0)
       |> assign(:has_more, meta.has_more)
